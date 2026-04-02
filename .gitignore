@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+node_modules/
+apps/web/dist/
+apps/desktop/src-tauri/target/
+*.spec.bak
+.DS_Store

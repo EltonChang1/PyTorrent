@@ -1,0 +1,52 @@
+:root {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  color: #e8eaed;
+  background: #12141a;
+}
+
+body {
+  margin: 0;
+  padding: 1.5rem;
+  max-width: 960px;
+  margin-inline: auto;
+}
+
+a {
+  color: #8ab4f8;
+}
+
+button,
+input[type="file"]::file-selector-button {
+  background: #3c4043;
+  color: inherit;
+  border: 1px solid #5f6368;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #4a4d51;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #3c4043;
+}
+
+.banner {
+  background: #1a1d24;
+  border: 1px solid #3c4043;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}

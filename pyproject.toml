@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytorrent-suite"
+version = "0.1.0"
+description = "PyTorrent: BitTorrent engine + local daemon + web UI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "PyTorrent contributors" }]
+dependencies = [
+  "aiohttp>=3.9.0",
+  "fastapi>=0.109.0",
+  "uvicorn[standard]>=0.27.0",
+  "structlog>=24.1.0",
+  "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4.0",
+  "pytest-asyncio>=0.23.0",
+  "httpx>=0.26.0",
+  "ruff>=0.2.0",
+  "mypy>=1.8.0",
+  "pyinstaller>=6.3.0",
+]
+
+[project.scripts]
+pytorrentd = "pytorrentd.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["pytorrent", "pytorrentd"]
+strict = false
