@@ -120,6 +120,44 @@ class TorrentSession:
             }
         await self._progress_cb(payload)
 
+    def announce_url_strings(self) -> list[str]:
+        out: list[str] = []
+        for u in self.meta.iter_announce_urls():
+            if isinstance(u, bytes):
+                out.append(u.decode("utf-8", errors="replace"))
+            else:
+                out.append(str(u))
+        return list(dict.fromkeys(out))
+
+    async def announce_tracker_event(
+        self,
+        sess: aiohttp.ClientSession,
+        event: str,
+    ) -> None:
+        """Send the same announce parameters to every known HTTP(S) tracker with a fixed event."""
+        urls = self.announce_url_strings()
+        if not urls:
+            return
+        left = max(0, self.meta.total_length - self.bytes_done())
+        downloaded = self.bytes_done()
+        async with self._lock:
+            up = self.uploaded
+        for u in urls:
+            try:
+                await announce(
+                    sess,
+                    u,
+                    self.meta.info_hash,
+                    self.peer_id,
+                    self.listen_port,
+                    up,
+                    downloaded,
+                    left,
+                    event=event,
+                )
+            except Exception as e:
+                log.debug("tracker announce event=%s err=%s", event, e)
+
     async def run(self) -> None:
         await self.load_resume()
         await self._emit_progress()
@@ -129,12 +167,7 @@ class TorrentSession:
             asyncio.create_task(self._peer_worker(peer_queue)) for _ in range(MAX_PEER_TASKS)
         ]
 
-        urls = []
-        for u in self.meta.iter_announce_urls():
-            if isinstance(u, bytes):
-                urls.append(u.decode("utf-8", errors="replace"))
-            else:
-                urls.append(str(u))
+        urls = self.announce_url_strings()
         if not urls:
             log.error("no announce URL in torrent")
             self.stop_event.set()
@@ -178,7 +211,7 @@ class TorrentSession:
             return resp
 
         try:
-            async with aiohttp.ClientSession() as sess:
+            async with aiohttp.ClientSession(trust_env=True) as sess:
                 while not self.stop_event.is_set():
                     now = time.time()
                     need_announce = first_started or (now - last_announce >= interval)

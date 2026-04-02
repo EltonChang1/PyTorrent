@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import aiohttp
 import structlog
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -102,6 +103,11 @@ class JobRegistry:
         job = self.jobs.get(jid)
         if not job:
             raise KeyError
+        try:
+            async with aiohttp.ClientSession(trust_env=True) as sess:
+                await job.session.announce_tracker_event(sess, "stopped")
+        except Exception as e:
+            log.warning("tracker_stopped_failed", job=jid, err=str(e))
         job.session.stop()
         if job.task:
             job.task.cancel()
@@ -228,6 +234,21 @@ def create_app() -> FastAPI:
         if hasattr(app.state, "bt_listen"):
             delattr(app.state, "bt_listen")
         if _registry:
+            try:
+                async with aiohttp.ClientSession(trust_env=True) as sess:
+                    coros = [
+                        j.session.announce_tracker_event(sess, "stopped")
+                        for j in list(_registry.jobs.values())
+                    ]
+                    if coros:
+                        await asyncio.wait_for(
+                            asyncio.gather(*coros, return_exceptions=True),
+                            timeout=12.0,
+                        )
+            except asyncio.TimeoutError:
+                log.warning("tracker_stopped_shutdown_timeout")
+            except Exception as e:
+                log.warning("tracker_stopped_shutdown_failed", err=str(e))
             for j in list(_registry.jobs.values()):
                 j.session.stop()
                 if j.task:

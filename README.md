@@ -47,6 +47,8 @@ The web UI (dev or built) polls `/health` and shows a short BitTorrent listener 
 | `PYTORRENT_BT_BIND` | `0.0.0.0` | Bind address for incoming peer connections |
 | `PYTORRENT_WEB_DIST` | _(auto)_ | Path to built web `dist/` (optional) |
 
+HTTP(S) tracker requests use `aiohttp` with **`trust_env=True`**, so standard proxy variables (**`HTTP_PROXY`**, **`HTTPS_PROXY`**, **`NO_PROXY`**) apply when set in the daemon’s environment.
+
 ## Desktop (Tauri)
 
 Requires [Rust](https://rustup.rs/) and npm. Build web first, then Tauri:
@@ -67,7 +69,8 @@ Release packaging of the Python daemon (PyInstaller) is described in `packaging/
 
 - **Trackers:** HTTP(S) announce only (no UDP tracker, DHT, or magnet links yet).
 - **Seeding:** Inbound peers are accepted on **`PYTORRENT_BT_BIND`:` `PYTORRENT_BT_PORT`** (same port announced to the tracker). You must be reachable on that port for remote peers to connect. Outbound `run_peer_seed` remains optional/experimental.
-- **Production hardening:** Rate limits, proxies, `event=stopped` on shutdown, optional auth for non-localhost API, and richer PyInstaller/Tauri integration are not implemented.
+- **Production hardening:** Rate limits, optional auth for non-localhost API, richer PyInstaller/Tauri integration. **Done:** `event=stopped` to HTTP(S) trackers when you stop/remove a job or shut down the daemon; HTTP(S) proxy env vars for tracker announces.
+- **Next (protocol):** UDP trackers, DHT, and **magnet links** (metadata fetch) are not implemented yet.
 
 ## License
 
