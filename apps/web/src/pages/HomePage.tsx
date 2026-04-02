@@ -172,8 +172,22 @@ export function HomePage() {
       <HeroBanner
         item={heroForBanner}
         onMoreInfo={() => heroForBanner && setSelected(heroForBanner)}
-        onAddFull={() => heroForBanner?.magnet && addMagnet(heroForBanner.magnet, "full")}
-        onAddStream={() => heroForBanner?.magnet && addMagnet(heroForBanner.magnet, "stream")}
+        onAddFull={() => {
+          if (!heroForBanner?.magnet) return;
+          if (heroForBanner.torrents && heroForBanner.torrents.length > 1) {
+            setSelected(heroForBanner);
+            return;
+          }
+          void addMagnet(heroForBanner.magnet, "full");
+        }}
+        onAddStream={() => {
+          if (!heroForBanner?.magnet) return;
+          if (heroForBanner.torrents && heroForBanner.torrents.length > 1) {
+            setSelected(heroForBanner);
+            return;
+          }
+          void addMagnet(heroForBanner.magnet, "stream");
+        }}
         adding={adding}
         canAdd={Boolean(heroForBanner?.magnet)}
       />

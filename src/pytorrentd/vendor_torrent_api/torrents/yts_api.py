@@ -31,17 +31,55 @@ YTS_MAGNET_TRACKERS: tuple[str, ...] = (
 _QUALITY_PREF = ("2160p", "1080p", "720p", "3D")
 
 
-def _pick_torrent(torrents: list[dict[str, Any]]) -> dict[str, Any] | None:
-    if not torrents:
+def _torrent_tiebreak_key(t: dict[str, Any]) -> tuple[int, int]:
+    seeds = int(t.get("seeds") or 0)
+    size_b = int(t.get("size_bytes") or 0)
+    return (seeds, size_b)
+
+
+def pick_preferred_yts_torrent(torrents: list[Any]) -> dict[str, Any] | None:
+    """Prefer 2160p → 1080p → 720p → 3D; tie-break seeds then size_bytes (JSON); HTML omits those."""
+    candidates = [t for t in torrents if isinstance(t, dict)]
+    if not candidates:
         return None
     for q in _QUALITY_PREF:
-        for t in torrents:
-            if str(t.get("quality", "")).strip() == q:
-                return t
-    return max(
-        torrents,
-        key=lambda t: (int(t.get("seeds") or 0), int(t.get("size_bytes") or 0)),
-    )
+        matches = [t for t in candidates if str(t.get("quality", "")).strip() == q]
+        if matches:
+            return max(matches, key=_torrent_tiebreak_key)
+    return max(candidates, key=_torrent_tiebreak_key)
+
+
+def _pick_torrent(torrents: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return pick_preferred_yts_torrent(torrents)
+
+
+def normalized_yts_torrent_options(display_name: str, torrents: list[Any]) -> list[dict[str, Any]]:
+    """UI/API: each option has quality, type, size, seeders, leechers, magnet."""
+    out: list[dict[str, Any]] = []
+    for t in torrents:
+        if not isinstance(t, dict):
+            continue
+        mag = t.get("magnet")
+        if isinstance(mag, str) and mag.startswith("magnet:"):
+            m = mag
+        else:
+            h = t.get("hash")
+            if not isinstance(h, str) or not h.strip():
+                continue
+            m = build_yts_magnet(display_name, h)
+        seeds = t.get("seeds")
+        peers = t.get("peers")
+        out.append(
+            {
+                "quality": t.get("quality"),
+                "type": t.get("type"),
+                "size": t.get("size"),
+                "seeders": str(seeds) if seeds is not None else "",
+                "leechers": str(peers) if peers is not None else "",
+                "magnet": m,
+            }
+        )
+    return out
 
 
 def build_yts_magnet(display_name: str, hash_hex: str) -> str:
@@ -69,28 +107,34 @@ def movie_to_catalog_row(movie: dict[str, Any]) -> dict[str, Any] | None:
     torrents = movie.get("torrents") or []
     if not isinstance(torrents, list):
         torrents = []
-    t = _pick_torrent([x for x in torrents if isinstance(x, dict)])
-    if t is None:
-        return None
-    h = t.get("hash")
-    if not h or not isinstance(h, str):
+    raw_list = [x for x in torrents if isinstance(x, dict)]
+    picked = pick_preferred_yts_torrent(raw_list)
+    if picked is None:
         return None
     name = movie.get("title_long") or movie.get("title_english") or movie.get("title") or "Unknown"
-    magnet = build_yts_magnet(name, h)
+    mag_html = picked.get("magnet")
+    if isinstance(mag_html, str) and mag_html.startswith("magnet:"):
+        magnet = mag_html
+    else:
+        h = picked.get("hash")
+        if not h or not isinstance(h, str):
+            return None
+        magnet = build_yts_magnet(name, h)
     posters = _poster_urls(movie)
+    torrents_ui = normalized_yts_torrent_options(name, raw_list)
     return {
         "name": name,
         "url": movie.get("url"),
         "magnet": magnet,
         "poster": posters,
-        "size": t.get("size"),
-        "seeders": str(t.get("seeds", "")),
-        "leechers": str(t.get("peers", "")),
+        "size": picked.get("size"),
+        "seeders": str(picked.get("seeds", "")),
+        "leechers": str(picked.get("peers", "")),
         "category": "movies",
         "imdb_code": movie.get("imdb_code"),
         "rating": str(movie.get("rating", "")),
         "description": movie.get("description_full") or movie.get("summary") or "",
-        "torrents": torrents,
+        "torrents": torrents_ui,
     }
 
 

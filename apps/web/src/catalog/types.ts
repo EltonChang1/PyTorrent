@@ -1,3 +1,13 @@
+/** YTS (and similar) per-quality options from the catalog API */
+export type CatalogTorrentOption = {
+  quality?: string;
+  type?: string;
+  size?: string;
+  seeders?: string;
+  leechers?: string;
+  magnet: string;
+};
+
 export type CatalogItem = {
   name?: string;
   magnet?: string;
@@ -9,6 +19,8 @@ export type CatalogItem = {
   imdb_code?: string;
   url?: string;
   category?: string;
+  /** When present, user can pick quality/version before download */
+  torrents?: CatalogTorrentOption[];
 };
 
 export type ApiFn = (path: string, init?: RequestInit) => Promise<Response>;

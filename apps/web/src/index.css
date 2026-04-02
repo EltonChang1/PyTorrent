@@ -631,6 +631,38 @@ code {
   color: #b3b3b3;
 }
 
+.modal-field {
+  margin: 0 0 1rem;
+}
+
+.modal-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #c8c8c8;
+}
+
+.modal-select {
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+.modal-source-foot {
+  margin: 0.75rem 0 0;
+  font-size: 0.82rem;
+}
+
+.modal-source-foot a {
+  color: #9aa0a6;
+}
+
 .modal-hint {
   margin: 0 0 1rem;
   font-size: 0.82rem;

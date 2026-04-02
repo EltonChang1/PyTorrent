@@ -87,7 +87,19 @@ class Yts:
                     obj["description"] = description
                     obj["runtime"] = runtime
                     obj["screenshot"] = screenshots
-                    obj["torrents"] = torrents
+                    picked = yts_api.pick_preferred_yts_torrent(torrents)
+                    if picked:
+                        pm = picked.get("magnet")
+                        if isinstance(pm, str) and pm.startswith("magnet:"):
+                            obj["magnet"] = pm
+                        else:
+                            h = picked.get("hash")
+                            if h:
+                                obj["magnet"] = yts_api.build_yts_magnet(name, h)
+                        obj["size"] = picked.get("size")
+                        obj["seeders"] = str(picked.get("seeds", ""))
+                        obj["leechers"] = str(picked.get("peers", ""))
+                    obj["torrents"] = yts_api.normalized_yts_torrent_options(name, torrents)
                 except Exception:
                     ...
         except Exception:
