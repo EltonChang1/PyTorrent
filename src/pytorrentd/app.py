@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -191,12 +191,33 @@ def create_app() -> FastAPI:
 
             await run_incoming_peer(reader, writer, resolve)
 
+        bound_addrs: list[str] = []
         try:
             _bt_server = await asyncio.start_server(bt_client, bind, port)
-            log.info("bt_listen", bind=bind, port=port)
+            for sock in _bt_server.sockets or ():
+                try:
+                    host, prt = sock.getsockname()[:2]
+                    bound_addrs.append(f"{host}:{prt}")
+                except OSError:
+                    pass
+            log.info("bt_listen", bind=bind, port=port, sockets=bound_addrs)
+            app.state.bt_listen = {
+                "ok": True,
+                "configured_bind": bind,
+                "configured_port": port,
+                "sockets": bound_addrs,
+                "announced_to_trackers_port": port,
+            }
         except OSError as e:
-            log.error("bt_listen_failed", err=str(e))
+            log.error("bt_listen_failed", err=str(e), bind=bind, port=port)
             _bt_server = None
+            app.state.bt_listen = {
+                "ok": False,
+                "configured_bind": bind,
+                "configured_port": port,
+                "announced_to_trackers_port": port,
+                "error": str(e),
+            }
 
         yield
 
@@ -204,6 +225,8 @@ def create_app() -> FastAPI:
             _bt_server.close()
             await _bt_server.wait_closed()
             _bt_server = None
+        if hasattr(app.state, "bt_listen"):
+            delattr(app.state, "bt_listen")
         if _registry:
             for j in list(_registry.jobs.values()):
                 j.session.stop()
@@ -221,8 +244,14 @@ def create_app() -> FastAPI:
     )
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    async def health(request: Request) -> dict[str, Any]:
+        out: dict[str, Any] = {"status": "ok"}
+        bt = getattr(request.app.state, "bt_listen", None)
+        if bt is not None:
+            out["bt_listen"] = bt
+        else:
+            out["bt_listen"] = {"ok": False, "error": "listener not initialized"}
+        return out
 
     dist = web_dist_dir()
 

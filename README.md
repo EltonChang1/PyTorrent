@@ -26,6 +26,16 @@ Open the URL Vite prints (e.g. `http://localhost:5173`). The dev server proxies 
 
 **Or** use the UI on the daemon port: `cd apps/web && npm run build`, then open `http://127.0.0.1:8765` (run `pytorrentd` from the repo root so it finds `apps/web/dist`, or set `PYTORRENT_WEB_DIST` to that folder).
 
+### Restart daemon and verify the BitTorrent listener
+
+After pulling code or changing `PYTORRENT_BT_*`, **stop** `pytorrentd` (Ctrl+C) and start it again. The HTTP API and the **peer TCP listener** start together.
+
+- **Check listener:** `curl -s http://127.0.0.1:8765/health | python -m json.tool` — look at `bt_listen.ok`, `sockets`, and `announced_to_trackers_port`.
+- **Local firewall (macOS):** if peers cannot connect, allow incoming TCP on **`PYTORRENT_BT_PORT`** (default **6881**) for Python/`pytorrentd` in **System Settings → Network → Firewall**.
+- **Router / remote peers:** forward the **same TCP port** you announce (default **6881**) to this machine’s LAN IP. NAT and closed firewalls prevent inbound handshakes even if the tracker lists you.
+
+The web UI (dev or built) polls `/health` and shows a short BitTorrent listener status line.
+
 ## Configuration (environment)
 
 | Variable | Default | Meaning |

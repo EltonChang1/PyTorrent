@@ -6,8 +6,18 @@ type TorrentRow = {
   download_dir: string;
   total: number;
   downloaded: number;
+  uploaded?: number;
   complete: boolean;
   error: string | null;
+};
+
+type BtListen = {
+  ok: boolean;
+  configured_bind?: string;
+  configured_port?: number;
+  announced_to_trackers_port?: number;
+  sockets?: string[];
+  error?: string;
 };
 
 /** Vite dev server proxies `/api` → daemon; production serves API on the same origin without `/api`. */
@@ -20,9 +30,21 @@ export default function App() {
   const [rows, setRows] = useState<TorrentRow[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
+  const [btListen, setBtListen] = useState<BtListen | null>(null);
 
   const pushLog = useCallback((line: string) => {
     setLog((prev) => [...prev.slice(-200), line]);
+  }, []);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      const r = await api("/health");
+      if (!r.ok) return;
+      const j = (await r.json()) as { bt_listen?: BtListen };
+      if (j.bt_listen) setBtListen(j.bt_listen);
+    } catch {
+      setBtListen({ ok: false, error: "could not reach /health" });
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -34,6 +56,12 @@ export default function App() {
       pushLog("Failed to fetch /torrents — is pytorrentd running on 127.0.0.1:8765?");
     }
   }, [pushLog]);
+
+  useEffect(() => {
+    fetchHealth();
+    const hid = setInterval(fetchHealth, 10000);
+    return () => clearInterval(hid);
+  }, [fetchHealth]);
 
   useEffect(() => {
     refresh();
@@ -80,6 +108,13 @@ export default function App() {
     e.target.value = "";
   }
 
+  const btLine =
+    btListen == null
+      ? "Checking BitTorrent listener…"
+      : btListen.ok
+        ? `BitTorrent TCP: listening (${btListen.sockets?.join(", ") || `${btListen.configured_bind}:${btListen.configured_port}`}) — announce port to trackers: ${btListen.announced_to_trackers_port ?? btListen.configured_port}. Forward that TCP port on your router/firewall for remote peers.`
+        : `BitTorrent listener failed: ${btListen.error ?? "unknown"}. Restart pytorrentd after freeing ${btListen.configured_bind}:${btListen.configured_port} or set PYTORRENT_BT_PORT.`;
+
   return (
     <>
       <h1>PyTorrent</h1>
@@ -89,7 +124,12 @@ export default function App() {
           <code>127.0.0.1:8765</code>). This page only talks to that API; the browser does not run
           BitTorrent peer wire itself.
         </p>
+        <p>
+          <strong>Restart after code changes:</strong> stop the daemon (Ctrl+C) and run{" "}
+          <code>pytorrentd</code> again so the peer listener binds.
+        </p>
         <p>WebSocket: {connected ? "connected" : "not connected"}</p>
+        <p style={{ marginTop: "0.75rem", fontSize: "0.95rem" }}>{btLine}</p>
       </div>
 
       <label>
@@ -102,6 +142,7 @@ export default function App() {
           <tr>
             <th>Name</th>
             <th>Progress</th>
+            <th>Uploaded</th>
             <th>Status</th>
             <th></th>
           </tr>
@@ -113,6 +154,11 @@ export default function App() {
               <td>
                 {t.total
                   ? `${((100 * t.downloaded) / t.total).toFixed(1)}%`
+                  : "—"}
+              </td>
+              <td>
+                {typeof t.uploaded === "number"
+                  ? `${(t.uploaded / 1_048_576).toFixed(2)} MiB`
                   : "—"}
               </td>
               <td>
