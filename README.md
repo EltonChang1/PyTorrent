@@ -24,6 +24,8 @@ cd apps/web && npm install && npm run dev
 
 Open the URL Vite prints (e.g. `http://localhost:5173`). The dev server proxies `/api` and `/ws` to `http://127.0.0.1:8765`.
 
+The web UI is a **Netflix-style** home (hero + horizontal rows from Torrent-Api-py), **Search** at `/find` (API stays `GET /search` on the daemon), and **My downloads** at `/downloads`. Playback stays in your own video app after files finish downloading locally.
+
 **Or** use the UI on the daemon port: `cd apps/web && npm run build`, then open `http://127.0.0.1:8765` (run `pytorrentd` from the repo root so it finds `apps/web/dist`, or set `PYTORRENT_WEB_DIST` to that folder).
 
 ### Restart daemon and verify the BitTorrent listener

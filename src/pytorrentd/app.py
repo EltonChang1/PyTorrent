@@ -557,4 +557,17 @@ def create_app() -> FastAPI:
                 return FileResponse(index)
         return HTMLResponse(_fallback_root_html())
 
+    # React Router paths (e.g. /find, /downloads) when UI is served from daemon — return SPA shell.
+    if dist:
+        _index_html = os.path.join(dist, "index.html")
+        if os.path.isfile(_index_html):
+
+            @app.get("/{spa_path:path}", response_model=None)
+            async def spa_shell(spa_path: str) -> FileResponse:
+                if spa_path.startswith(
+                    ("torrents", "health", "browse", "search", "ws", "assets/")
+                ) or spa_path == "assets":
+                    raise HTTPException(404, "not found")
+                return FileResponse(_index_html)
+
     return app
