@@ -56,6 +56,7 @@ HTTP(S) tracker requests use `aiohttp` with **`trust_env=True`**, so standard pr
 
 - **Magnets:** `POST /torrents/magnet` with JSON `{"magnet":"magnet:?xt=…&tr=…"}`. The magnet must include at least one `tr=` tracker; the daemon fetches metadata over the peer wire (**ut_metadata**) and then runs like a normal job. UDP and HTTP(S) trackers are used for announces and peer discovery.
 - **Search (optional):** run Torrent-Api-py locally (or any compatible server), set `PYTORRENT_SEARCH_API_BASE`, then use `GET /search?q=…` (optional `site=1337x`, `limit=…`). The web UI shows a search box when `/health` reports `search.configured`. Keep the search API on **localhost** unless you understand the scraping and legal implications.
+- **Browse (same base URL):** the daemon proxies catalog calls to Torrent-Api-py: `GET /browse/sites`, `GET /browse/trending?site=yts&limit=24&category=movies`, `GET /browse/recent?…`, `GET /browse/category?site=1337x&query=…&category=movies`. The **Movies** tab in the web UI uses these to show posters and “Add download”.
 
 ## Desktop (Tauri)
 

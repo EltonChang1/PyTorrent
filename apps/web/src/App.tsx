@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DiscoverMovies } from "./DiscoverMovies";
 
 type TorrentRow = {
   id: string;
@@ -20,13 +21,6 @@ type BtListen = {
   error?: string;
 };
 
-type SearchHit = {
-  name?: string;
-  magnet?: string;
-  size?: string;
-  seeders?: string;
-};
-
 /** Vite dev server proxies `/api` → daemon; production serves API on the same origin without `/api`. */
 const API_PREFIX = import.meta.env.DEV ? "/api" : "";
 
@@ -39,14 +33,25 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [btListen, setBtListen] = useState<BtListen | null>(null);
   const [searchConfigured, setSearchConfigured] = useState(false);
-  const [searchQ, setSearchQ] = useState("");
-  const [searchBusy, setSearchBusy] = useState(false);
-  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [magnetField, setMagnetField] = useState("");
+  const [tab, setTab] = useState<"discover" | "downloads">("downloads");
+  const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(null);
+  const preferDiscoverOnce = useRef(true);
 
   const pushLog = useCallback((line: string) => {
     setLog((prev) => [...prev.slice(-200), line]);
   }, []);
+
+  const showToast = useCallback((msg: string, kind: "ok" | "err" = "ok") => {
+    setToast({ msg, kind });
+    pushLog(`[${kind}] ${msg}`);
+  }, [pushLog]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const fetchHealth = useCallback(async () => {
     try {
@@ -54,7 +59,13 @@ export default function App() {
       if (!r.ok) return;
       const j = (await r.json()) as { bt_listen?: BtListen; search?: { configured?: boolean } };
       if (j.bt_listen) setBtListen(j.bt_listen);
-      setSearchConfigured(Boolean(j.search?.configured));
+      const sc = Boolean(j.search?.configured);
+      setSearchConfigured(sc);
+      if (!sc) setTab("downloads");
+      else if (preferDiscoverOnce.current) {
+        preferDiscoverOnce.current = false;
+        setTab("discover");
+      }
     } catch {
       setBtListen({ ok: false, error: "could not reach /health" });
     }
@@ -115,30 +126,13 @@ export default function App() {
       body: JSON.stringify({ magnet: m }),
     });
     if (!r.ok) {
-      pushLog(`Magnet add failed: ${await r.text()}`);
+      showToast(await r.text(), "err");
       return;
     }
-    pushLog(`Magnet added: ${JSON.stringify(await r.json())}`);
+    const j = (await r.json()) as { name?: string };
+    showToast(`Added: ${j.name ?? "torrent"}`, "ok");
     setMagnetField("");
     refresh();
-  }
-
-  async function runSearch() {
-    const q = searchQ.trim();
-    if (!q) return;
-    setSearchBusy(true);
-    try {
-      const r = await api(`/search?q=${encodeURIComponent(q)}&limit=20`);
-      if (!r.ok) {
-        pushLog(`Search failed: ${await r.text()}`);
-        setSearchHits([]);
-        return;
-      }
-      const j = (await r.json()) as { data?: SearchHit[] };
-      setSearchHits(Array.isArray(j.data) ? j.data : []);
-    } finally {
-      setSearchBusy(false);
-    }
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -148,10 +142,10 @@ export default function App() {
     fd.append("file", f);
     const r = await api("/torrents", { method: "POST", body: fd });
     if (!r.ok) {
-      pushLog(`Add failed: ${await r.text()}`);
+      showToast(`Add failed: ${await r.text()}`, "err");
       return;
     }
-    pushLog(`Added: ${JSON.stringify(await r.json())}`);
+    showToast(`Added: ${JSON.stringify(await r.json())}`, "ok");
     refresh();
     e.target.value = "";
   }
@@ -160,145 +154,139 @@ export default function App() {
     btListen == null
       ? "Checking BitTorrent listener…"
       : btListen.ok
-        ? `BitTorrent TCP: listening (${btListen.sockets?.join(", ") || `${btListen.configured_bind}:${btListen.configured_port}`}) — announce port to trackers: ${btListen.announced_to_trackers_port ?? btListen.configured_port}. Forward that TCP port on your router/firewall for remote peers.`
-        : `BitTorrent listener failed: ${btListen.error ?? "unknown"}. Restart pytorrentd after freeing ${btListen.configured_bind}:${btListen.configured_port} or set PYTORRENT_BT_PORT.`;
+        ? `Listening on ${btListen.sockets?.join(", ") || `${btListen.configured_bind}:${btListen.configured_port}`}; trackers use port ${btListen.announced_to_trackers_port ?? btListen.configured_port}.`
+        : `Listener failed: ${btListen.error ?? "unknown"}. Set PYTORRENT_BT_PORT or free the port.`;
 
   return (
-    <>
-      <h1>PyTorrent</h1>
-      <div className="banner" role="status">
-        <p>
-          The <strong>daemon</strong> must be running: <code>pytorrentd</code> (default{" "}
-          <code>127.0.0.1:8765</code>). This page only talks to that API; the browser does not run
-          BitTorrent peer wire itself.
-        </p>
-        <p>
-          <strong>Restart after code changes:</strong> stop the daemon (Ctrl+C) and run{" "}
-          <code>pytorrentd</code> again so the peer listener binds.
-        </p>
-        <p>WebSocket: {connected ? "connected" : "not connected"}</p>
-        <p style={{ marginTop: "0.75rem", fontSize: "0.95rem" }}>{btLine}</p>
-      </div>
-
-      <label>
-        Add torrent:{" "}
-        <input type="file" accept=".torrent,application/x-bittorrent" onChange={onFile} />
-      </label>
-
-      <div style={{ marginTop: "1rem" }}>
-        <label>
-          Magnet link (needs <code>tr=</code> trackers):{" "}
-          <input
-            type="text"
-            size={72}
-            value={magnetField}
-            onChange={(e) => setMagnetField(e.target.value)}
-            placeholder="magnet:?xt=urn:btih:…"
-          />
-        </label>{" "}
-        <button type="button" onClick={() => submitMagnet()}>
-          Add magnet
-        </button>
-      </div>
-
-      <section style={{ marginTop: "1.5rem" }}>
-        <h2 style={{ fontSize: "1.1rem" }}>Search</h2>
-        {!searchConfigured ? (
-          <p style={{ color: "#666", fontSize: "0.95rem" }}>
-            Search is off. Run{" "}
-            <a href="https://github.com/Ryuk-me/Torrent-Api-py">Torrent-Api-py</a> locally and set{" "}
-            <code>PYTORRENT_SEARCH_API_BASE</code> (e.g. <code>http://127.0.0.1:8009</code>), then restart{" "}
-            <code>pytorrentd</code>.
-          </p>
-        ) : (
-          <>
-            <label>
-              Query:{" "}
-              <input
-                type="search"
-                value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && runSearch()}
-              />
-            </label>{" "}
-            <button type="button" disabled={searchBusy} onClick={() => runSearch()}>
-              {searchBusy ? "Searching…" : "Search"}
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand">
+          <h1 className="brand-title">PyTorrent</h1>
+          <p className="brand-tag">Local downloads — runs on your machine</p>
+        </div>
+        <nav className="app-nav" aria-label="Main">
+          {searchConfigured ? (
+            <button
+              type="button"
+              className={tab === "discover" ? "nav-btn nav-btn-active" : "nav-btn"}
+              onClick={() => setTab("discover")}
+            >
+              Movies
             </button>
-            {searchHits.length > 0 && (
-              <table style={{ marginTop: "0.75rem" }}>
-                <thead>
+          ) : null}
+          <button
+            type="button"
+            className={tab === "downloads" ? "nav-btn nav-btn-active" : "nav-btn"}
+            onClick={() => setTab("downloads")}
+          >
+            My downloads
+          </button>
+        </nav>
+      </header>
+
+      {toast && (
+        <div className={toast.kind === "err" ? "toast toast-err" : "toast toast-ok"} role="status">
+          {toast.msg}
+        </div>
+      )}
+
+      <details className="status-panel">
+        <summary>Connection & BitTorrent status</summary>
+        <p>
+          API / daemon: <code>pytorrentd</code> (default <code>127.0.0.1:8765</code>). WebSocket:{" "}
+          {connected ? "connected" : "disconnected"}.
+        </p>
+        <p className="status-bt">{btLine}</p>
+        {!searchConfigured && (
+          <p>
+            Movie browse needs{" "}
+            <a href="https://github.com/Ryuk-me/Torrent-Api-py">Torrent-Api-py</a> and{" "}
+            <code>PYTORRENT_SEARCH_API_BASE</code> on the daemon.
+          </p>
+        )}
+      </details>
+
+      {searchConfigured && tab === "discover" && (
+        <DiscoverMovies api={api} onToast={showToast} onAdded={refresh} />
+      )}
+
+      {(!searchConfigured || tab === "downloads") && (
+        <section className="downloads-section">
+          <h2 className="section-title">My downloads</h2>
+          <div className="add-row">
+            <label className="field-inline">
+              <span className="field-label">Torrent file</span>
+              <input type="file" accept=".torrent,application/x-bittorrent" onChange={onFile} />
+            </label>
+            <label className="field-inline grow">
+              <span className="field-label">Magnet</span>
+              <input
+                type="text"
+                className="input-magnet"
+                value={magnetField}
+                onChange={(e) => setMagnetField(e.target.value)}
+                placeholder="magnet:?xt=urn:btih:… (needs tr= trackers)"
+              />
+            </label>
+            <button type="button" className="btn-primary" onClick={() => submitMagnet()}>
+              Add magnet
+            </button>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Progress</th>
+                  <th>Uploaded</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
                   <tr>
-                    <th>Name</th>
-                    <th>Size</th>
-                    <th>Seeders</th>
-                    <th></th>
+                    <td colSpan={5} className="muted">
+                      No active downloads. Use Movies or add a torrent above.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {searchHits.map((row, i) => (
-                    <tr key={i}>
-                      <td>{row.name ?? "—"}</td>
-                      <td>{row.size ?? "—"}</td>
-                      <td>{row.seeders ?? "—"}</td>
+                ) : (
+                  rows.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.name}</td>
                       <td>
-                        {row.magnet ? (
-                          <button type="button" onClick={() => submitMagnet(row.magnet)}>
-                            Add
-                          </button>
-                        ) : (
-                          "—"
-                        )}
+                        {t.total ? `${((100 * t.downloaded) / t.total).toFixed(1)}%` : "—"}
+                      </td>
+                      <td>
+                        {typeof t.uploaded === "number"
+                          ? `${(t.uploaded / 1_048_576).toFixed(2)} MiB`
+                          : "—"}
+                      </td>
+                      <td>{t.error ? t.error : t.complete ? "complete" : "downloading"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            api(`/torrents/${t.id}/stop`, { method: "POST" }).then(refresh)
+                          }
+                        >
+                          Stop
+                        </button>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
-      </section>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Progress</th>
-            <th>Uploaded</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((t) => (
-            <tr key={t.id}>
-              <td>{t.name}</td>
-              <td>
-                {t.total
-                  ? `${((100 * t.downloaded) / t.total).toFixed(1)}%`
-                  : "—"}
-              </td>
-              <td>
-                {typeof t.uploaded === "number"
-                  ? `${(t.uploaded / 1_048_576).toFixed(2)} MiB`
-                  : "—"}
-              </td>
-              <td>
-                {t.error ? t.error : t.complete ? "complete" : "downloading"}
-              </td>
-              <td>
-                <button type="button" onClick={() => api(`/torrents/${t.id}/stop`, { method: "POST" }).then(refresh)}>
-                  Stop
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <h2>Events</h2>
-      <pre style={{ fontSize: 12, maxHeight: 240, overflow: "auto", background: "#1a1d24", padding: "0.75rem" }}>
-        {log.join("\n")}
-      </pre>
-    </>
+      <details className="events-panel">
+        <summary>Event log</summary>
+        <pre className="events-pre">{log.join("\n")}</pre>
+      </details>
+    </div>
   );
 }

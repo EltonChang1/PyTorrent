@@ -34,3 +34,12 @@ def test_search_requires_configuration(monkeypatch):
     with TestClient(app) as client:
         r = client.get("/search?q=test")
         assert r.status_code == 503
+
+
+def test_browse_requires_configuration(monkeypatch):
+    monkeypatch.delenv("PYTORRENT_SEARCH_API_BASE", raising=False)
+    monkeypatch.setenv("PYTORRENT_BT_PORT", "58884")
+    app = create_app()
+    with TestClient(app) as client:
+        assert client.get("/browse/sites").status_code == 503
+        assert client.get("/browse/trending?site=yts").status_code == 503
