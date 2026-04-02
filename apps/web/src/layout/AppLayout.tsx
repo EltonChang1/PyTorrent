@@ -30,6 +30,7 @@ export function AppLayout({
 }: Props) {
   const navigate = useNavigate();
   const [quick, setQuick] = useState("");
+  const { user } = outletContext;
 
   const btLine =
     btListen == null
@@ -62,6 +63,18 @@ export function AppLayout({
             >
               My downloads
             </NavLink>
+            <NavLink to="/account" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
+              Dashboard
+            </NavLink>
+            {user === undefined ? null : user ? (
+              <span className="nf-auth-user muted" title={user.username}>
+                {user.username}
+              </span>
+            ) : (
+              <NavLink to="/login" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
+                Sign in
+              </NavLink>
+            )}
           </nav>
           {searchConfigured ? (
             <form

@@ -31,6 +31,39 @@ class MagnetAddBody(BaseModel):
     """Prefer sequential pieces from the start (watch while downloading in the browser)."""
 
 
+class RegisterBody(BaseModel):
+    username: str = Field(..., min_length=2, max_length=32)
+    password: str = Field(..., min_length=6, max_length=200)
+
+
+class LoginBody(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+class UserSettingsPatch(BaseModel):
+    favoriteGenres: list[str] | None = None
+    hiddenRowKeys: list[str] | None = None
+    showRecommendations: bool | None = None
+
+
+class WatchProgressIn(BaseModel):
+    job_id: str = Field(..., min_length=8, max_length=80)
+    position_sec: float = Field(0, ge=0)
+    duration_sec: float = Field(0, ge=0)
+    title: str | None = None
+
+
+def _ensure_vendor_torrent_path() -> None:
+    import sys
+    from pathlib import Path
+
+    v = Path(__file__).resolve().parent / "vendor_torrent_api"
+    s = str(v)
+    if s not in sys.path:
+        sys.path.insert(0, s)
+
+
 @dataclass
 class Job:
     id: str
@@ -229,6 +262,9 @@ def create_app() -> FastAPI:
         global _registry, _bt_server
         data = os.environ.get("PYTORRENT_DATA_DIR", os.path.expanduser("~/.pytorrent"))
         os.makedirs(data, exist_ok=True)
+        from pytorrentd import user_store
+
+        await user_store.async_init_db()
         _registry = JobRegistry(data)
 
         bind = os.environ.get("PYTORRENT_BT_BIND", "0.0.0.0")
@@ -329,6 +365,7 @@ def create_app() -> FastAPI:
             and not bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
             "external_base": bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
         }
+        out["accounts"] = {"enabled": True}
         return out
 
     dist = web_dist_dir()
@@ -564,6 +601,150 @@ def create_app() -> FastAPI:
                 "page": page,
             },
         )
+
+    @app.get("/browse/yts/list")
+    async def browse_yts_curated_list(
+        genre: str | None = None,
+        sort_by: str = "download_count",
+        order_by: str = "desc",
+        minimum_rating: int | None = None,
+        limit: int = 24,
+        page: int = 1,
+    ) -> JSONResponse:
+        """YTS JSON list_movies slice (genres, sorts) for home-page rails."""
+        _ensure_vendor_torrent_path()
+        from torrents import yts_api
+
+        async with aiohttp.ClientSession(trust_env=True) as sess:
+            raw = await yts_api.fetch_list_movies_json(
+                sess,
+                page=page,
+                limit=limit,
+                sort_by=sort_by or None,
+                order_by=order_by,
+                genre=genre,
+                minimum_rating=minimum_rating,
+            )
+        if raw is None:
+            return JSONResponse({"data": [], "total": 0, "error": "yts_list_unavailable"})
+        out = yts_api.wrap_list_response(raw, limit=limit, elapsed=0.0)
+        return JSONResponse(out)
+
+    async def _session_user(request: Request) -> int | None:
+        from pytorrentd import user_store
+
+        tok = request.cookies.get("pt_session")
+        return await asyncio.to_thread(user_store.session_user_id, tok)
+
+    @app.post("/auth/register")
+    async def auth_register(body: RegisterBody) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid, msg = await asyncio.to_thread(user_store.register_user, body.username, body.password)
+        if uid is None:
+            raise HTTPException(400, msg) from None
+        token = await asyncio.to_thread(user_store.create_session, uid)
+        u = await asyncio.to_thread(user_store.get_user, uid)
+        resp = JSONResponse({"user": u})
+        resp.set_cookie(
+            key="pt_session",
+            value=token,
+            httponly=True,
+            samesite="lax",
+            max_age=user_store.SESSION_DAYS * 86400,
+            path="/",
+        )
+        return resp
+
+    @app.post("/auth/login")
+    async def auth_login(body: LoginBody) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid = await asyncio.to_thread(user_store.verify_login, body.username, body.password)
+        if uid is None:
+            raise HTTPException(401, "invalid username or password") from None
+        token = await asyncio.to_thread(user_store.create_session, uid)
+        u = await asyncio.to_thread(user_store.get_user, uid)
+        resp = JSONResponse({"user": u})
+        resp.set_cookie(
+            key="pt_session",
+            value=token,
+            httponly=True,
+            samesite="lax",
+            max_age=user_store.SESSION_DAYS * 86400,
+            path="/",
+        )
+        return resp
+
+    @app.post("/auth/logout")
+    async def auth_logout(request: Request) -> JSONResponse:
+        from pytorrentd import user_store
+
+        tok = request.cookies.get("pt_session")
+        await asyncio.to_thread(user_store.revoke_session, tok)
+        resp = JSONResponse({"ok": True})
+        resp.delete_cookie("pt_session", path="/")
+        return resp
+
+    @app.get("/auth/me")
+    async def auth_me(request: Request) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid = await _session_user(request)
+        if uid is None:
+            return JSONResponse({"user": None})
+        u = await asyncio.to_thread(user_store.get_user, uid)
+        return JSONResponse({"user": u})
+
+    @app.get("/user/settings")
+    async def user_settings_get(request: Request) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid = await _session_user(request)
+        if uid is None:
+            raise HTTPException(401, "login required") from None
+        s = await asyncio.to_thread(user_store.get_settings, uid)
+        return JSONResponse(s)
+
+    @app.put("/user/settings")
+    async def user_settings_put(request: Request, body: UserSettingsPatch) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid = await _session_user(request)
+        if uid is None:
+            raise HTTPException(401, "login required") from None
+        cur = await asyncio.to_thread(user_store.get_settings, uid)
+        patch = body.model_dump(exclude_unset=True)
+        merged = {**cur, **patch}
+        await asyncio.to_thread(user_store.save_settings, uid, merged)
+        return JSONResponse(merged)
+
+    @app.get("/user/watch/progress")
+    async def user_watch_list(request: Request) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid = await _session_user(request)
+        if uid is None:
+            raise HTTPException(401, "login required") from None
+        rows = await asyncio.to_thread(user_store.list_watch_progress, uid, 30)
+        return JSONResponse({"items": rows})
+
+    @app.post("/user/watch/progress")
+    async def user_watch_save(request: Request, body: WatchProgressIn) -> JSONResponse:
+        from pytorrentd import user_store
+
+        uid = await _session_user(request)
+        if uid is None:
+            raise HTTPException(401, "login required") from None
+        await asyncio.to_thread(
+            user_store.save_watch_progress,
+            uid,
+            body.job_id,
+            body.position_sec,
+            body.duration_sec,
+            body.title,
+        )
+        return JSONResponse({"ok": True})
 
     @app.get("/catalog/image", response_model=None)
     async def catalog_image(url: str) -> Response:

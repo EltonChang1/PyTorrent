@@ -13,10 +13,15 @@ export type TorrentJob = {
   sequential?: boolean;
 };
 
+export type AuthUser = { id: number; username: string };
+
 export type AppOutletContext = {
   api: ApiFn;
   showToast: (msg: string, kind?: "ok" | "err") => void;
   refreshTorrents: () => Promise<void>;
   torrentRows: TorrentJob[];
   searchConfigured: boolean;
+  /** `undefined` while loading /auth/me */
+  user: AuthUser | null | undefined;
+  refreshUser: () => Promise<void>;
 };

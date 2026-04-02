@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import type { AppOutletContext, TorrentJob } from "./appOutletContext";
+import type { AppOutletContext, AuthUser, TorrentJob } from "./appOutletContext";
 import { AppLayout } from "./layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
 import { SearchPage } from "./pages/SearchPage";
 import { DownloadsPage } from "./pages/DownloadsPage";
 import { WatchPage } from "./pages/WatchPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { AccountPage } from "./pages/AccountPage";
 
 type BtListen = {
   ok: boolean;
@@ -19,7 +22,7 @@ type BtListen = {
 const API_PREFIX = import.meta.env.DEV ? "/api" : "";
 
 const api = (path: string, init?: RequestInit) =>
-  fetch(`${API_PREFIX}${path}`, init);
+  fetch(`${API_PREFIX}${path}`, { ...init, credentials: "include" });
 
 function AppRoutes() {
   const [torrentRows, setTorrentRows] = useState<TorrentJob[]>([]);
@@ -28,6 +31,7 @@ function AppRoutes() {
   const [btListen, setBtListen] = useState<BtListen | null>(null);
   const [searchConfigured, setSearchConfigured] = useState(false);
   const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(null);
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
 
   const pushLog = useCallback((line: string) => {
     setLog((prev) => [...prev.slice(-200), line]);
@@ -69,11 +73,26 @@ function AppRoutes() {
     }
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const r = await api("/auth/me");
+      if (!r.ok) {
+        setUser(null);
+        return;
+      }
+      const j = (await r.json()) as { user: AuthUser | null };
+      setUser(j.user ?? null);
+    } catch {
+      setUser(null);
+    }
+  }, []);
+
   useEffect(() => {
     fetchHealth();
+    void refreshUser();
     const hid = setInterval(fetchHealth, 10000);
     return () => clearInterval(hid);
-  }, [fetchHealth]);
+  }, [fetchHealth, refreshUser]);
 
   useEffect(() => {
     refreshTorrents();
@@ -117,8 +136,10 @@ function AppRoutes() {
       refreshTorrents,
       torrentRows,
       searchConfigured,
+      user,
+      refreshUser,
     }),
-    [showToast, refreshTorrents, torrentRows, searchConfigured],
+    [showToast, refreshTorrents, torrentRows, searchConfigured, user, refreshUser],
   );
 
   return (
@@ -140,6 +161,9 @@ function AppRoutes() {
           <Route path="find" element={<SearchPage />} />
           <Route path="downloads" element={<DownloadsPage />} />
           <Route path="watch" element={<WatchPage />} />
+          <Route path="login" element={<LoginPage />} />
+          <Route path="register" element={<RegisterPage />} />
+          <Route path="account" element={<AccountPage />} />
         </Route>
       </Routes>
       <details className="nf-debug">

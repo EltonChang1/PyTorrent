@@ -2,15 +2,36 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
 import type { CatalogItem } from "../catalog/types";
-import { fetchBrowseRow } from "../catalog/browse";
+import { fetchBrowseRow, fetchYtsCuratedList, type YtsCuratedParams } from "../catalog/browse";
 import { HeroBanner } from "../components/HeroBanner";
 import { ContentRow } from "../components/ContentRow";
 import { TitleDetailModal } from "../components/TitleDetailModal";
 import { ContinueWatchingRow } from "../components/ContinueWatchingRow";
+import { ResumePlaybackRow } from "../components/ResumePlaybackRow";
+import type { DashboardSettings } from "../lib/dashboardSettings";
+import { defaultDashboardSettings, loadGuestDashboard } from "../lib/dashboardSettings";
 
-const YTS_HOME_ROWS = [
-  { key: "yts-trend", title: "Trending on YTS", kind: "trending" as const, site: "yts" },
-] as const;
+type RowSource =
+  | { kind: "browse"; browse: "trending" | "recent"; site: string }
+  | { kind: "ytsJson"; params: YtsCuratedParams }
+  | { kind: "recommend" };
+
+type PrimaryRowSpec = { key: string; title: string; source: RowSource };
+
+const STATIC_PRIMARY_ROWS: PrimaryRowSpec[] = [
+  { key: "yts-trend", title: "Trending on YTS", source: { kind: "browse", browse: "trending", site: "yts" } },
+  { key: "yts-recent", title: "Recently added (YTS)", source: { kind: "browse", browse: "recent", site: "yts" } },
+  { key: "yts-horror", title: "Horror on YTS", source: { kind: "ytsJson", params: { genre: "Horror" } } },
+  { key: "yts-comedy", title: "Comedy on YTS", source: { kind: "ytsJson", params: { genre: "Comedy" } } },
+  { key: "yts-scifi", title: "Sci-Fi on YTS", source: { kind: "ytsJson", params: { genre: "Sci-Fi" } } },
+  { key: "yts-action", title: "Action on YTS", source: { kind: "ytsJson", params: { genre: "Action" } } },
+  {
+    key: "yts-classics",
+    title: "Highly rated classics",
+    source: { kind: "ytsJson", params: { sort_by: "year", order_by: "asc", minimum_rating: 7 } },
+  },
+  { key: "yts-for-you", title: "Picked for you", source: { kind: "recommend" } },
+];
 
 const BACKUP_HOME_ROWS = [
   { key: "tgx-trend", title: "Trending on TorrentGalaxy", kind: "trending" as const, site: "tgx" },
@@ -20,7 +41,8 @@ const BACKUP_HOME_ROWS = [
   { key: "kickass-trend", title: "Trending — Kickass", kind: "trending" as const, site: "kickass" },
 ] as const;
 
-const ALL_KEYS = [...YTS_HOME_ROWS.map((r) => r.key), ...BACKUP_HOME_ROWS.map((r) => r.key)] as string[];
+const PRIMARY_KEYS = STATIC_PRIMARY_ROWS.map((r) => r.key);
+const ALL_KEYS = [...PRIMARY_KEYS, ...BACKUP_HOME_ROWS.map((r) => r.key)] as string[];
 
 type RowState = { items: CatalogItem[]; loading: boolean; error?: string };
 
@@ -33,29 +55,84 @@ function emptyRows(loadingYts: boolean): Record<string, RowState> {
   return o;
 }
 
+async function fetchPrimarySpec(
+  api: AppOutletContext["api"],
+  spec: PrimaryRowSpec,
+  dash: DashboardSettings,
+): Promise<{ spec: PrimaryRowSpec; items: CatalogItem[]; error?: string }> {
+  try {
+    if (spec.source.kind === "browse") {
+      const r = await fetchBrowseRow(api, spec.source.browse, spec.source.site);
+      return { spec, items: r.items, error: r.error };
+    }
+    if (spec.source.kind === "ytsJson") {
+      const r = await fetchYtsCuratedList(api, spec.source.params);
+      return { spec, items: r.items, error: r.error };
+    }
+    const g = dash.favoriteGenres[0] || "Horror";
+    const r = await fetchYtsCuratedList(api, { genre: g, sort_by: "download_count" });
+    return { spec, items: r.items, error: r.error };
+  } catch (e) {
+    return { spec, items: [], error: String(e) };
+  }
+}
+
 export function HomePage() {
-  const { api, showToast, refreshTorrents, torrentRows, searchConfigured } =
+  const { api, showToast, refreshTorrents, torrentRows, searchConfigured, user } =
     useOutletContext<AppOutletContext>();
   const navigate = useNavigate();
 
+  const [dash, setDash] = useState<DashboardSettings>(() => defaultDashboardSettings());
   const [rows, setRows] = useState<Record<string, RowState>>(() => emptyRows(true));
   const [catalogFallback, setCatalogFallback] = useState(false);
   const [selected, setSelected] = useState<CatalogItem | null>(null);
   const [heroItem, setHeroItem] = useState<CatalogItem | null>(null);
+  const [heroIdx, setHeroIdx] = useState(0);
   const [adding, setAdding] = useState<"full" | "stream" | null>(null);
+
+  useEffect(() => {
+    if (user === undefined) return;
+    if (user === null) {
+      setDash(loadGuestDashboard());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api("/user/settings");
+        if (!r.ok || cancelled) return;
+        const j = (await r.json()) as DashboardSettings;
+        if (!cancelled) setDash({ ...defaultDashboardSettings(), ...j });
+      } catch {
+        if (!cancelled) setDash(loadGuestDashboard());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, user]);
+
+  const visiblePrimarySpecs = useMemo(() => {
+    return STATIC_PRIMARY_ROWS.filter((spec) => {
+      if (dash.hiddenRowKeys.includes(spec.key)) return false;
+      if (spec.key === "yts-for-you" && !dash.showRecommendations) return false;
+      return true;
+    });
+  }, [dash.hiddenRowKeys, dash.showRecommendations]);
 
   useEffect(() => {
     if (!searchConfigured) return;
     let cancelled = false;
     (async () => {
-      const ytsResults = await Promise.all(
-        YTS_HOME_ROWS.map((spec) => fetchBrowseRow(api, spec.kind, spec.site)),
-      );
+      const specs =
+        visiblePrimarySpecs.length > 0
+          ? visiblePrimarySpecs
+          : STATIC_PRIMARY_ROWS.slice(0, 2);
+      const results = await Promise.all(specs.map((spec) => fetchPrimarySpec(api, spec, dash)));
       if (cancelled) return;
 
-      const ytsFailed = ytsResults.every(
-        (r) => Boolean(r.error) || !Array.isArray(r.items) || r.items.length === 0,
-      );
+      const trend = results.find((x) => x.spec.key === "yts-trend");
+      const ytsFailed = !trend?.items?.length;
 
       if (ytsFailed) {
         setCatalogFallback(true);
@@ -63,12 +140,13 @@ export function HomePage() {
           BACKUP_HOME_ROWS.map((spec) => fetchBrowseRow(api, spec.kind, spec.site)),
         );
         if (cancelled) return;
-        setRows((prev) => {
-          const next = { ...prev };
-          for (let i = 0; i < YTS_HOME_ROWS.length; i++) {
-            const spec = YTS_HOME_ROWS[i];
-            const { items, error } = ytsResults[i];
-            next[spec.key] = { items, loading: false, error };
+        setRows(() => {
+          const next = emptyRows(false);
+          for (const k of PRIMARY_KEYS) {
+            next[k] = { items: [], loading: false };
+          }
+          for (const br of results) {
+            next[br.spec.key] = { items: br.items, loading: false, error: br.error };
           }
           for (let i = 0; i < BACKUP_HOME_ROWS.length; i++) {
             const spec = BACKUP_HOME_ROWS[i];
@@ -81,12 +159,14 @@ export function HomePage() {
       }
 
       setCatalogFallback(false);
+      if (cancelled) return;
       setRows((prev) => {
         const next = { ...prev };
-        for (let i = 0; i < YTS_HOME_ROWS.length; i++) {
-          const spec = YTS_HOME_ROWS[i];
-          const { items, error } = ytsResults[i];
-          next[spec.key] = { items, loading: false, error };
+        for (const k of PRIMARY_KEYS) {
+          next[k] = { items: [], loading: false };
+        }
+        for (const br of results) {
+          next[br.spec.key] = { items: br.items, loading: false, error: br.error };
         }
         for (const spec of BACKUP_HOME_ROWS) {
           next[spec.key] = { items: [], loading: false };
@@ -97,12 +177,29 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [api, searchConfigured]);
+  }, [api, searchConfigured, visiblePrimarySpecs, dash.favoriteGenres.join("|"), dash.showRecommendations]);
+
+  const heroPool = useMemo(() => {
+    const trend = rows["yts-trend"]?.items ?? [];
+    return trend.slice(0, 12);
+  }, [rows]);
 
   useEffect(() => {
-    const yts = rows["yts-trend"]?.items?.[0];
-    if (yts) {
-      setHeroItem(yts);
+    setHeroIdx(0);
+  }, [heroPool.length]);
+
+  useEffect(() => {
+    if (heroPool.length <= 1) return;
+    const id = window.setInterval(() => {
+      setHeroIdx((i) => (i + 1) % heroPool.length);
+    }, 14000);
+    return () => window.clearInterval(id);
+  }, [heroPool.length]);
+
+  useEffect(() => {
+    const fromTrend = heroPool[heroIdx] ?? heroPool[0];
+    if (fromTrend) {
+      setHeroItem(fromTrend);
       return;
     }
     if (catalogFallback) {
@@ -115,7 +212,7 @@ export function HomePage() {
       }
     }
     setHeroItem(null);
-  }, [rows, catalogFallback]);
+  }, [rows, catalogFallback, heroPool, heroIdx]);
 
   const addMagnet = useCallback(
     async (magnet: string, mode: "full" | "stream") => {
@@ -144,11 +241,10 @@ export function HomePage() {
 
   const openDetail = useCallback((item: CatalogItem) => setSelected(item), []);
 
-  const heroForBanner = useMemo(() => heroItem, [heroItem]);
-
-  const rowsToRender = catalogFallback
-    ? [...YTS_HOME_ROWS, ...BACKUP_HOME_ROWS]
-    : [...YTS_HOME_ROWS];
+  type RenderSpec = PrimaryRowSpec | (typeof BACKUP_HOME_ROWS)[number];
+  const rowsToRender: RenderSpec[] = catalogFallback
+    ? [...STATIC_PRIMARY_ROWS, ...BACKUP_HOME_ROWS]
+    : visiblePrimarySpecs;
 
   if (!searchConfigured) {
     return (
@@ -170,26 +266,26 @@ export function HomePage() {
   return (
     <div className="page-home">
       <HeroBanner
-        item={heroForBanner}
-        onMoreInfo={() => heroForBanner && setSelected(heroForBanner)}
+        item={heroItem}
+        onMoreInfo={() => heroItem && setSelected(heroItem)}
         onAddFull={() => {
-          if (!heroForBanner?.magnet) return;
-          if (heroForBanner.torrents && heroForBanner.torrents.length > 1) {
-            setSelected(heroForBanner);
+          if (!heroItem?.magnet) return;
+          if (heroItem.torrents && heroItem.torrents.length > 1) {
+            setSelected(heroItem);
             return;
           }
-          void addMagnet(heroForBanner.magnet, "full");
+          void addMagnet(heroItem.magnet, "full");
         }}
         onAddStream={() => {
-          if (!heroForBanner?.magnet) return;
-          if (heroForBanner.torrents && heroForBanner.torrents.length > 1) {
-            setSelected(heroForBanner);
+          if (!heroItem?.magnet) return;
+          if (heroItem.torrents && heroItem.torrents.length > 1) {
+            setSelected(heroItem);
             return;
           }
-          void addMagnet(heroForBanner.magnet, "stream");
+          void addMagnet(heroItem.magnet, "stream");
         }}
         adding={adding}
-        canAdd={Boolean(heroForBanner?.magnet)}
+        canAdd={Boolean(heroItem?.magnet)}
       />
 
       {catalogFallback ? (
@@ -200,6 +296,7 @@ export function HomePage() {
       ) : null}
 
       <div className="page-home-rows">
+        <ResumePlaybackRow />
         <ContinueWatchingRow jobs={torrentRows} />
 
         {rowsToRender.map((spec) => {
