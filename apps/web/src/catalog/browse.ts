@@ -1,5 +1,15 @@
 import type { ApiFn, CatalogItem } from "./types";
 
+const API_PREFIX = import.meta.env.DEV ? "/api" : "";
+
+/** Dev: prefix `/catalog/*` so Vite proxies to the daemon. */
+export function resolveCatalogMediaUrl(href: string): string | null {
+  if (!href) return null;
+  if (href.startsWith("http://") || href.startsWith("https://")) return href;
+  if (href.startsWith("/catalog/")) return `${API_PREFIX}${href}`;
+  return null;
+}
+
 export async function fetchBrowseRow(
   api: ApiFn,
   kind: "trending" | "recent",
@@ -24,9 +34,24 @@ export async function fetchBrowseRow(
   return { items: Array.isArray(j.data) ? j.data : [] };
 }
 
-export function posterSrc(row: CatalogItem): string | undefined {
+/** Ordered poster URLs (proxied `/catalog/image?…` or remote https, for fallback chain). */
+export function posterUrlsList(row: CatalogItem): string[] {
   const p = row.poster;
-  if (!p) return undefined;
-  if (typeof p === "string") return p;
-  return p.length > 0 && typeof p[0] === "string" ? p[0] : undefined;
+  if (!p) return [];
+  if (typeof p === "string") {
+    const u = resolveCatalogMediaUrl(p);
+    return u ? [u] : [];
+  }
+  if (!Array.isArray(p)) return [];
+  const out: string[] = [];
+  for (const x of p) {
+    if (typeof x !== "string") continue;
+    const u = resolveCatalogMediaUrl(x);
+    if (u) out.push(u);
+  }
+  return out;
+}
+
+export function posterSrc(row: CatalogItem): string | undefined {
+  return posterUrlsList(row)[0];
 }

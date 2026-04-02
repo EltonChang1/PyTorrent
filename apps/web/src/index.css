@@ -301,12 +301,30 @@ code {
   background: rgba(109, 109, 110, 0.9);
 }
 
+.btn-hero-tertiary {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+.btn-hero-tertiary:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+
 .btn-hero:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 /* Rows */
+.catalog-fallback-banner {
+  margin: 0 1.5rem 0.5rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(229, 9, 20, 0.12);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
 .page-home-rows {
   margin-top: -5rem;
   position: relative;
@@ -626,6 +644,18 @@ code {
   gap: 0.65rem;
 }
 
+.modal-actions-split {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+@media (min-width: 520px) {
+  .modal-actions-split {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
 .btn-lg {
   padding: 0.55rem 1.15rem;
   font-size: 0.92rem;
@@ -831,6 +861,18 @@ code {
   background: #555;
 }
 
+.download-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+}
+
 .empty-pad {
   padding: 1rem 0;
 }
@@ -874,4 +916,28 @@ button:hover {
   padding: 0.65rem;
   border-radius: 6px;
   margin: 0.5rem 0 0;
+}
+
+.page-watch .watch-hint {
+  max-width: 42rem;
+  line-height: 1.45;
+  margin-bottom: 1rem;
+}
+
+.watch-video {
+  width: 100%;
+  max-height: 72vh;
+  background: #000;
+  border-radius: 8px;
+  margin: 0.5rem 0 1rem;
+}
+
+.watch-meta {
+  margin-bottom: 1rem;
+}
+
+.watch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
 }

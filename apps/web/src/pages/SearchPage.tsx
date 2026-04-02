@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
 import type { CatalogItem } from "../catalog/types";
 import { TitleDetailModal } from "../components/TitleDetailModal";
@@ -16,6 +16,7 @@ const SITE_PRESETS = [
 
 export function SearchPage() {
   const { api, showToast, refreshTorrents, searchConfigured } = useOutletContext<AppOutletContext>();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const qParam = (params.get("q") ?? "").trim();
   const siteParam = params.get("site") ?? "";
@@ -26,7 +27,7 @@ export function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [selected, setSelected] = useState<CatalogItem | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<"full" | "stream" | null>(null);
 
   useEffect(() => {
     setLocalQ(qParam);
@@ -80,33 +81,37 @@ export function SearchPage() {
   );
 
   const addMagnet = useCallback(
-    async (magnet: string) => {
-      setAdding(true);
+    async (magnet: string, mode: "full" | "stream") => {
+      setAdding(mode);
       try {
         const r = await api("/torrents/magnet", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ magnet }),
+          body: JSON.stringify({ magnet, sequential: mode === "stream" }),
         });
         if (!r.ok) {
           showToast(await r.text(), "err");
           return;
         }
-        const j = (await r.json()) as { name?: string };
+        const j = (await r.json()) as { name?: string; id?: string };
         showToast(`Added: ${j.name ?? "torrent"}`, "ok");
         setSelected(null);
         await refreshTorrents();
+        if (mode === "stream" && j.id) navigate(`/watch?id=${encodeURIComponent(j.id)}`);
       } finally {
-        setAdding(false);
+        setAdding(null);
       }
     },
-    [api, showToast, refreshTorrents],
+    [api, showToast, refreshTorrents, navigate],
   );
 
   if (!searchConfigured) {
     return (
       <div className="page-narrow empty-state">
-        <p className="muted">Search requires Torrent-Api-py and PYTORRENT_SEARCH_API_BASE.</p>
+        <p className="muted">
+          Search requires the catalog API. Run <code>pytorrentd</code> (embedded API) or set{" "}
+          <code>PYTORRENT_SEARCH_API_BASE</code>.
+        </p>
       </div>
     );
   }
@@ -166,7 +171,8 @@ export function SearchPage() {
       <TitleDetailModal
         item={selected}
         onClose={() => setSelected(null)}
-        onAdd={addMagnet}
+        onAddFull={(m) => addMagnet(m, "full")}
+        onAddStream={(m) => addMagnet(m, "stream")}
         adding={adding}
       />
     </div>

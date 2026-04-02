@@ -111,8 +111,10 @@ export function AppLayout({
 
       <footer className="nf-footer">
         <p className="nf-legal">
-          Only download and share content you have the right to use. PyTorrent runs locally; playback uses your own
-          apps after files finish downloading.
+          Only download and share content you have the right to use. PyTorrent runs locally. Use{" "}
+          <strong>Full download</strong> for a normal torrent, or <strong>Watch while downloading</strong> for
+          sequential download and in-browser playback (MP4/WebM work best). For privacy on peer connections, use a{" "}
+          <strong>system-wide VPN</strong>; the app does not start a VPN for you.
         </p>
       </footer>
     </div>

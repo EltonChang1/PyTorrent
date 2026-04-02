@@ -5,6 +5,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
 import { SearchPage } from "./pages/SearchPage";
 import { DownloadsPage } from "./pages/DownloadsPage";
+import { WatchPage } from "./pages/WatchPage";
 
 type BtListen = {
   ok: boolean;
@@ -138,6 +139,7 @@ function AppRoutes() {
           <Route index element={<HomePage />} />
           <Route path="find" element={<SearchPage />} />
           <Route path="downloads" element={<DownloadsPage />} />
+          <Route path="watch" element={<WatchPage />} />
         </Route>
       </Routes>
       <details className="nf-debug">

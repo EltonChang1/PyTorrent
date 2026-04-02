@@ -169,7 +169,7 @@ all_sites = {
         "recent_available": True,
         "recent_category_available": False,
         "categories": [],
-        "limit": 20,
+        "limit": 50,
     },
     "limetorrent": {
         "website": Limetorrent,

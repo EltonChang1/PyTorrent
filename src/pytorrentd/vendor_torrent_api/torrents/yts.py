@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import time
 import aiohttp
@@ -7,10 +8,23 @@ from helper.asyncioPoliciesFix import decorator_asyncio_fix
 from helper.html_scraper import Scraper
 from constants.base_url import YTS
 from constants.headers import HEADER_AIO
+from helper.poster_proxy import rewrite_browse_result_posters
+from torrents import yts_api
+
+
+def _yts_catalog_mode() -> str:
+    """html (default) | json | auto. YTS_USE_HTML_ONLY=1 forces html."""
+    if os.environ.get("YTS_USE_HTML_ONLY", "").strip().lower() in ("1", "true", "yes"):
+        return "html"
+    m = os.environ.get("YTS_CATALOG_MODE", "html").strip().lower()
+    if m in ("html", "json", "auto"):
+        return m
+    return "html"
 
 
 class Yts:
     _name = "YTS"
+
     def __init__(self):
         self.BASE_URL = YTS
         self.LIMIT = None
@@ -74,9 +88,9 @@ class Yts:
                     obj["runtime"] = runtime
                     obj["screenshot"] = screenshots
                     obj["torrents"] = torrents
-                except:
+                except Exception:
                     ...
-        except:
+        except Exception:
             return None
 
     async def _get_torrent(self, result, session, urls):
@@ -120,16 +134,49 @@ class Yts:
                             else int(total_page)
                         )
 
-                except:
+                except Exception:
                     ...
                 return my_dict, list_of_urls
-        except:
+        except Exception:
             return None, None
 
+    async def _html_parser_result(self, start_time, url, session):
+        htmls = await Scraper().get_all_results(session, url)
+        result, urls = self._parser(htmls)
+        if result is not None:
+            results = await self._get_torrent(result, session, urls)
+            results["time"] = time.time() - start_time
+            results["total"] = len(results["data"])
+            return results
+        return result
+
     async def search(self, query, page, limit):
+        self.LIMIT = limit
+        start_time = time.time()
+        mode = _yts_catalog_mode()
+        if mode in ("json", "auto"):
+            async with aiohttp.ClientSession(trust_env=True) as session:
+                raw = await yts_api.fetch_list_movies_json(
+                    session,
+                    page=page,
+                    limit=limit,
+                    query_term=query,
+                    sort_by="date_added",
+                    order_by="desc",
+                )
+            if mode == "json":
+                if raw is None:
+                    return None
+                return yts_api.wrap_list_response(
+                    raw, limit=limit, elapsed=time.time() - start_time
+                )
+            if raw is not None:
+                out = yts_api.wrap_list_response(
+                    raw, limit=limit, elapsed=time.time() - start_time
+                )
+                if len(out.get("data") or []) > 0:
+                    return out
         async with aiohttp.ClientSession() as session:
-            start_time = time.time()
-            self.LIMIT = limit
             if page != 1:
                 url = (
                     self.BASE_URL
@@ -141,29 +188,69 @@ class Yts:
                 url = self.BASE_URL + "/browse-movies/{}/all/all/0/latest/0/all".format(
                     query
                 )
-            return await self.parser_result(start_time, url, session)
-
-    async def parser_result(self, start_time, url, session):
-        htmls = await Scraper().get_all_results(session, url)
-        result, urls = self._parser(htmls)
-        if result is not None:
-            results = await self._get_torrent(result, session, urls)
-            results["time"] = time.time() - start_time
-            results["total"] = len(results["data"])
-            return results
-        return result
+            res = await self._html_parser_result(start_time, url, session)
+            if res is not None:
+                rewrite_browse_result_posters(res, YTS)
+            return res
 
     async def trending(self, category, page, limit):
+        self.LIMIT = limit
+        start_time = time.time()
+        mode = _yts_catalog_mode()
+        if mode in ("json", "auto"):
+            async with aiohttp.ClientSession(trust_env=True) as session:
+                raw = await yts_api.fetch_list_movies_json(
+                    session,
+                    page=page,
+                    limit=limit,
+                    sort_by="download_count",
+                    order_by="desc",
+                )
+            if mode == "json":
+                if raw is None:
+                    return None
+                return yts_api.wrap_list_response(
+                    raw, limit=limit, elapsed=time.time() - start_time
+                )
+            if raw is not None:
+                out = yts_api.wrap_list_response(
+                    raw, limit=limit, elapsed=time.time() - start_time
+                )
+                if len(out.get("data") or []) > 0:
+                    return out
         async with aiohttp.ClientSession() as session:
-            start_time = time.time()
-            self.LIMIT = limit
             url = self.BASE_URL + "/trending-movies"
-            return await self.parser_result(start_time, url, session)
+            res = await self._html_parser_result(start_time, url, session)
+            if res is not None:
+                rewrite_browse_result_posters(res, YTS)
+            return res
 
     async def recent(self, category, page, limit):
+        self.LIMIT = limit
+        start_time = time.time()
+        mode = _yts_catalog_mode()
+        if mode in ("json", "auto"):
+            async with aiohttp.ClientSession(trust_env=True) as session:
+                raw = await yts_api.fetch_list_movies_json(
+                    session,
+                    page=page,
+                    limit=limit,
+                    sort_by="date_added",
+                    order_by="desc",
+                )
+            if mode == "json":
+                if raw is None:
+                    return None
+                return yts_api.wrap_list_response(
+                    raw, limit=limit, elapsed=time.time() - start_time
+                )
+            if raw is not None:
+                out = yts_api.wrap_list_response(
+                    raw, limit=limit, elapsed=time.time() - start_time
+                )
+                if len(out.get("data") or []) > 0:
+                    return out
         async with aiohttp.ClientSession() as session:
-            start_time = time.time()
-            self.LIMIT = limit
             if page != 1:
                 url = (
                     self.BASE_URL
@@ -171,4 +258,7 @@ class Yts:
                 )
             else:
                 url = self.BASE_URL + "/browse-movies/0/all/all/0/featured/0/all"
-            return await self.parser_result(start_time, url, session)
+            res = await self._html_parser_result(start_time, url, session)
+            if res is not None:
+                rewrite_browse_result_posters(res, YTS)
+            return res

@@ -81,6 +81,7 @@ class TorrentSession:
         *,
         listen_port: int = 6881,
         data_dir: str | None = None,
+        sequential: bool = False,
     ):
         self.meta = meta
         self.download_dir = download_dir
@@ -91,7 +92,7 @@ class TorrentSession:
         self.piece_state = PieceState(
             meta.piece_length, meta.total_length, meta.num_pieces, BLOCK_SIZE
         )
-        self.picker = PiecePicker(meta.num_pieces)
+        self.picker = PiecePicker(meta.num_pieces, sequential=sequential)
         self.stop_event = asyncio.Event()
         self.uploaded = 0
         self._progress_cb: ProgressCallback = None
@@ -125,6 +126,15 @@ class TorrentSession:
 
     def is_complete(self) -> bool:
         return len(self.picker.completed) >= self.meta.num_pieces
+
+    def torrent_contiguous_verified_end(self) -> int:
+        """Byte offset past the longest verified prefix from the start of torrent space."""
+        n = 0
+        for i in range(self.meta.num_pieces):
+            if i not in self.picker.completed:
+                break
+            n += self.piece_state.piece_len(i)
+        return n
 
     async def load_resume(self) -> None:
         path = self.state_path()

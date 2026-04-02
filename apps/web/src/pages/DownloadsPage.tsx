@@ -1,28 +1,33 @@
 import { useCallback, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
 
 export function DownloadsPage() {
   const { api, showToast, refreshTorrents, torrentRows } = useOutletContext<AppOutletContext>();
+  const navigate = useNavigate();
   const [magnetField, setMagnetField] = useState("");
 
-  const submitMagnet = useCallback(async () => {
-    const m = magnetField.trim();
-    if (!m) return;
-    const r = await api("/torrents/magnet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ magnet: m }),
-    });
-    if (!r.ok) {
-      showToast(await r.text(), "err");
-      return;
-    }
-    const j = (await r.json()) as { name?: string };
-    showToast(`Added: ${j.name ?? "torrent"}`, "ok");
-    setMagnetField("");
-    await refreshTorrents();
-  }, [api, magnetField, showToast, refreshTorrents]);
+  const submitMagnet = useCallback(
+    async (mode: "full" | "stream") => {
+      const m = magnetField.trim();
+      if (!m) return;
+      const r = await api("/torrents/magnet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ magnet: m, sequential: mode === "stream" }),
+      });
+      if (!r.ok) {
+        showToast(await r.text(), "err");
+        return;
+      }
+      const j = (await r.json()) as { name?: string; id?: string };
+      showToast(`Added: ${j.name ?? "torrent"}`, "ok");
+      setMagnetField("");
+      await refreshTorrents();
+      if (mode === "stream" && j.id) navigate(`/watch?id=${encodeURIComponent(j.id)}`);
+    },
+    [api, magnetField, showToast, refreshTorrents, navigate],
+  );
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -58,8 +63,11 @@ export function DownloadsPage() {
             placeholder="magnet:?xt=urn:btih:…"
           />
         </label>
-        <button type="button" className="btn-primary" onClick={() => submitMagnet()}>
-          Add magnet
+        <button type="button" className="btn-primary" onClick={() => submitMagnet("full")}>
+          Full download
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => submitMagnet("stream")}>
+          Watch while downloading
         </button>
       </div>
 
@@ -86,13 +94,20 @@ export function DownloadsPage() {
                 <p className="download-card-path muted" title={t.download_dir}>
                   {t.download_dir}
                 </p>
-                <button
-                  type="button"
-                  className="btn-stop"
-                  onClick={() => api(`/torrents/${t.id}/stop`, { method: "POST" }).then(refreshTorrents)}
-                >
-                  Stop
-                </button>
+                <div className="download-card-actions">
+                  {t.sequential ? (
+                    <Link className="btn-secondary btn-sm" to={`/watch?id=${encodeURIComponent(t.id)}`}>
+                      {t.complete ? "Open player" : "Watch while downloading"}
+                    </Link>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn-stop"
+                    onClick={() => api(`/torrents/${t.id}/stop`, { method: "POST" }).then(refreshTorrents)}
+                  >
+                    Stop
+                  </button>
+                </div>
               </li>
             );
           })}

@@ -14,6 +14,8 @@ MAX_PIPELINE_PER_PEER = 5
 @dataclass
 class PiecePicker:
     num_pieces: int
+    sequential: bool = False
+    """If True, prefer lowest missing piece index (for watch-while-downloading)."""
     peer_has: dict[bytes, set[int]] = field(default_factory=dict)
     """peer_id -> set of piece indices we believe they have."""
     completed: set[int] = field(default_factory=set)
@@ -81,6 +83,8 @@ class PiecePicker:
 
         if self.endgame():
             piece = random.choice(candidates)
+        elif self.sequential:
+            piece = min(candidates)
         else:
             piece = min(candidates, key=lambda p: (self.rarity[p], p))
 

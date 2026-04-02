@@ -9,6 +9,8 @@ export type TorrentJob = {
   uploaded?: number;
   complete: boolean;
   error: string | null;
+  /** Job was added with sequential piece picking (watch while downloading). */
+  sequential?: boolean;
 };
 
 export type AppOutletContext = {

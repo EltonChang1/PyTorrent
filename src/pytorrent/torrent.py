@@ -146,6 +146,56 @@ class TorrentMeta:
         return list(dict.fromkeys(urls))
 
 
+_VIDEO_EXTS = (".mp4", ".mkv", ".avi", ".webm", ".m4v", ".mov")
+
+
+def primary_playback_span(meta: TorrentMeta) -> tuple[int, int]:
+    """Torrent-byte offset and length of the main video file (largest video extension, else first file)."""
+    if not meta.files:
+        return (0, meta.total_length)
+    offset = 0
+    best_off = 0
+    best_len = meta.files[0].length
+    best_size = 0
+    for fe in meta.files:
+        name = "/".join(fe.relative_path).lower()
+        if name.endswith(_VIDEO_EXTS) and fe.length >= best_size:
+            best_off = offset
+            best_len = fe.length
+            best_size = fe.length
+        offset += fe.length
+    if best_size > 0:
+        return (best_off, best_len)
+    return (0, meta.files[0].length)
+
+
+def playback_content_type(meta: TorrentMeta, torrent_offset: int) -> str:
+    """Guess Content-Type for the file containing torrent_offset."""
+    if not meta.files:
+        return _mime_from_filename(meta.name)
+    pos = 0
+    for fe in meta.files:
+        if pos <= torrent_offset < pos + fe.length:
+            return _mime_from_filename(fe.relative_path[-1])
+        pos += fe.length
+    return "application/octet-stream"
+
+
+def _mime_from_filename(name: str) -> str:
+    lower = name.lower()
+    if lower.endswith(".mp4") or lower.endswith(".m4v"):
+        return "video/mp4"
+    if lower.endswith(".webm"):
+        return "video/webm"
+    if lower.endswith(".mkv"):
+        return "video/x-matroska"
+    if lower.endswith(".avi"):
+        return "video/x-msvideo"
+    if lower.endswith(".mov"):
+        return "video/quicktime"
+    return "application/octet-stream"
+
+
 def _decode_name(b: bytes) -> str:
     try:
         return b.decode("utf-8")

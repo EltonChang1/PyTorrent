@@ -5,6 +5,8 @@ export type CatalogItem = {
   seeders?: string;
   leechers?: string;
   poster?: string | string[];
+  /** Used with GET /catalog/poster when all poster URLs fail */
+  imdb_code?: string;
   url?: string;
   category?: string;
 };

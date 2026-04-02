@@ -1,0 +1,51 @@
+{
+  "status": "ok",
+  "status_message": "Query was successful",
+  "data": {
+    "movie_count": 1,
+    "limit": 20,
+    "page_number": 1,
+    "movies": [
+      {
+        "id": 31114,
+        "url": "https://yts.mx/movies/test-2013",
+        "imdb_code": "tt2407380",
+        "title": "Test",
+        "title_english": "Test",
+        "title_long": "Test (2013)",
+        "slug": "test-2013",
+        "year": 2013,
+        "rating": 6.5,
+        "runtime": 89,
+        "genres": ["Drama"],
+        "summary": "Short summary.",
+        "description_full": "Full description.",
+        "small_cover_image": "https://yts.mx/assets/images/movies/test_2013/small-cover.jpg",
+        "medium_cover_image": "https://yts.mx/assets/images/movies/test_2013/medium-cover.jpg",
+        "large_cover_image": "https://yts.mx/assets/images/movies/test_2013/large-cover.jpg",
+        "torrents": [
+          {
+            "url": "https://yts.mx/torrent/download/221A3DEC53BA607BFC89FFAE313563ECFA4EF1B2",
+            "hash": "221A3DEC53BA607BFC89FFAE313563ECFA4EF1B2",
+            "quality": "720p",
+            "type": "web",
+            "seeds": 10,
+            "peers": 3,
+            "size": "786.3 MB",
+            "size_bytes": 824495309
+          },
+          {
+            "url": "https://yts.mx/torrent/download/A26030DA37CF83B2FA21FD7E50174DA12C405E5D",
+            "hash": "A26030DA37CF83B2FA21FD7E50174DA12C405E5D",
+            "quality": "1080p",
+            "type": "web",
+            "seeds": 11,
+            "peers": 2,
+            "size": "1.43 GB",
+            "size_bytes": 1535450808
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -10,14 +10,14 @@ from typing import Any
 
 import aiohttp
 import structlog
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from pytorrent.bencoding import BencodeError
-from pytorrent.torrent import TorrentMeta
+from pytorrent.torrent import TorrentMeta, playback_content_type, primary_playback_span
 from pytorrent.session import TorrentSession
 from pytorrentd.torrent_api_client import torrent_api_configured, torrent_api_get_json, torrent_api_search_json
 
@@ -27,6 +27,8 @@ log = structlog.get_logger()
 class MagnetAddBody(BaseModel):
     magnet: str = Field(..., min_length=12)
     download_dir: str | None = None
+    sequential: bool = False
+    """Prefer sequential pieces from the start (watch while downloading in the browser)."""
 
 
 @dataclass
@@ -38,6 +40,7 @@ class Job:
     task: asyncio.Task | None = None
     error: str | None = None
     complete_broadcast: bool = False
+    sequential: bool = False
 
 
 class JobRegistry:
@@ -66,6 +69,8 @@ class JobRegistry:
         self,
         raw: bytes,
         download_dir: str | None,
+        *,
+        sequential: bool = False,
     ) -> Job:
         meta = TorrentMeta.from_bytes(raw)
         jid = meta.info_hash.hex()
@@ -78,9 +83,10 @@ class JobRegistry:
             ddir,
             data_dir=self.data_dir,
             listen_port=int(os.environ.get("PYTORRENT_BT_PORT", "6881")),
+            sequential=sequential,
         )
 
-        job = Job(id=jid, meta=meta, download_dir=ddir, session=session)
+        job = Job(id=jid, meta=meta, download_dir=ddir, session=session, sequential=sequential)
 
         async def on_prog(p: dict[str, Any]) -> None:
             p = {**p, "job_id": jid}
@@ -135,6 +141,43 @@ _bt_server: asyncio.Server | None = None
 def get_registry() -> JobRegistry:
     assert _registry is not None
     return _registry
+
+
+def _parse_range_header(range_header: str | None, size: int) -> tuple[int, int] | None:
+    """Inclusive byte range within logical file of length ``size``. None = send default prefix."""
+    if range_header is None:
+        return None
+    if not range_header.startswith("bytes="):
+        return None
+    part = range_header.split("=", 1)[1].strip().split(",", 1)[0].strip()
+    if part.startswith("-"):
+        try:
+            suffix = int(part[1:])
+        except ValueError:
+            return None
+        if suffix <= 0 or size <= 0:
+            return None
+        start = max(0, size - suffix)
+        return (start, size - 1)
+    if "-" not in part:
+        return None
+    start_s, end_s = part.split("-", 1)
+    try:
+        if start_s == "":
+            return None
+        start = int(start_s)
+        end = int(end_s) if end_s != "" else size - 1
+    except ValueError:
+        return None
+    if size <= 0 or start < 0 or start >= size:
+        return None
+    end = min(end, size - 1)
+    if end < start:
+        return None
+    return (start, end)
+
+
+_STREAM_CHUNK = 256 * 1024
 
 
 def web_dist_dir() -> str | None:
@@ -305,6 +348,7 @@ def create_app() -> FastAPI:
                     "uploaded": j.session.uploaded,
                     "complete": j.session.is_complete(),
                     "error": j.error,
+                    "sequential": j.sequential,
                 }
             )
         return JSONResponse(out)
@@ -312,13 +356,14 @@ def create_app() -> FastAPI:
     @app.post("/torrents")
     async def add_torrent(
         file: UploadFile = File(...),
-        download_dir: str | None = None,
+        download_dir: str | None = Form(None),
+        sequential: bool = Form(False),
     ) -> JSONResponse:
         raw = await file.read()
         if not raw:
             raise HTTPException(400, "empty file")
         try:
-            job = await get_registry().add_torrent(raw, download_dir)
+            job = await get_registry().add_torrent(raw, download_dir, sequential=sequential)
         except Exception as e:
             log.warning("invalid torrent", err=str(e))
             raise HTTPException(400, f"invalid torrent: {e}") from e
@@ -358,7 +403,9 @@ def create_app() -> FastAPI:
         except BencodeError as e:
             raise HTTPException(400, f"invalid metadata: {e}") from e
         try:
-            job = await get_registry().add_torrent(meta.raw, body.download_dir)
+            job = await get_registry().add_torrent(
+                meta.raw, body.download_dir, sequential=body.sequential
+            )
         except Exception as e:
             log.warning("magnet add failed", err=str(e))
             raise HTTPException(400, str(e)) from e
@@ -367,8 +414,97 @@ def create_app() -> FastAPI:
                 "id": job.id,
                 "name": job.meta.name,
                 "download_dir": job.download_dir,
+                "sequential": job.sequential,
             }
         )
+
+    def _stream_headers_and_body(
+        job: Job, request: Request, *, head_only: bool
+    ) -> Response | StreamingResponse:
+        v_off, v_len = primary_playback_span(job.meta)
+        if v_len <= 0:
+            raise HTTPException(404, "nothing to stream") from None
+        contiguous = job.session.torrent_contiguous_verified_end()
+        video_avail = max(0, min(contiguous - v_off, v_len))
+        mime = playback_content_type(job.meta, v_off)
+
+        if video_avail <= 0:
+            return Response(
+                status_code=503,
+                headers={
+                    "Retry-After": "2",
+                    "Accept-Ranges": "bytes",
+                    "Content-Type": mime,
+                },
+            )
+
+        range_header = request.headers.get("range")
+        parsed = _parse_range_header(range_header, v_len)
+        if parsed is None:
+            start, end = 0, min(v_len - 1, video_avail - 1)
+        else:
+            start, end = parsed
+            end = min(end, v_len - 1, video_avail - 1)
+            if start >= video_avail:
+                return Response(
+                    status_code=416,
+                    headers={"Content-Range": f"bytes */{v_len}"},
+                )
+            if start > end:
+                return Response(
+                    status_code=416,
+                    headers={"Content-Range": f"bytes */{v_len}"},
+                )
+
+        abs_start = v_off + start
+        body_len = end - start + 1
+        full_complete = video_avail >= v_len and start == 0 and end == v_len - 1
+        use_partial = bool(range_header) or not full_complete
+        status = 206 if use_partial else 200
+
+        hdrs: dict[str, str] = {
+            "Content-Type": mime,
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(body_len),
+        }
+        if use_partial:
+            hdrs["Content-Range"] = f"bytes {start}-{end}/{v_len}"
+
+        if head_only:
+            return Response(status_code=status, headers=hdrs)
+
+        async def gen():
+            remaining = body_len
+            pos = abs_start
+            while remaining > 0:
+                n = min(_STREAM_CHUNK, remaining)
+                chunk = await job.session.storage.read_at(pos, n)
+                if len(chunk) != n:
+                    break
+                yield chunk
+                pos += n
+                remaining -= n
+
+        return StreamingResponse(
+            gen(),
+            status_code=status,
+            media_type=mime,
+            headers=hdrs,
+        )
+
+    @app.head("/torrents/{job_id}/stream", response_model=None)
+    async def stream_torrent_head(job_id: str, request: Request):
+        job = get_registry().get(job_id)
+        if not job:
+            raise HTTPException(404, "not found") from None
+        return _stream_headers_and_body(job, request, head_only=True)
+
+    @app.get("/torrents/{job_id}/stream", response_model=None)
+    async def stream_torrent_get(job_id: str, request: Request):
+        job = get_registry().get(job_id)
+        if not job:
+            raise HTTPException(404, "not found") from None
+        return _stream_headers_and_body(job, request, head_only=False)
 
     @app.get("/search")
     async def search_proxy(
@@ -429,6 +565,35 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.get("/catalog/image", response_model=None)
+    async def catalog_image(url: str) -> Response:
+        """Proxy YTS poster URLs with mirror Referer; host allowlist only (not an open proxy)."""
+        from pytorrentd.catalog_image_proxy import fetch_catalog_image
+
+        body, ct = await fetch_catalog_image(url)
+        return Response(content=body, media_type=ct)
+
+    @app.get("/catalog/poster")
+    async def catalog_poster(imdb_code: str) -> JSONResponse:
+        from pytorrentd.yts_catalog_client import lookup_poster_url
+
+        url = await lookup_poster_url(imdb_code)
+        if not url:
+            raise HTTPException(
+                404,
+                "No poster found. Set TMDB_API_KEY or OMDB_API_KEY, or check imdb_code.",
+            ) from None
+        return JSONResponse({"url": url})
+
+    @app.get("/catalog/yts/movie")
+    async def catalog_yts_movie(movie_id: int) -> JSONResponse:
+        from pytorrentd.yts_catalog_client import get_yts_movie_row
+
+        row = await get_yts_movie_row(movie_id)
+        if not row:
+            raise HTTPException(404, "YTS movie not found") from None
+        return JSONResponse(row)
+
     @app.post("/torrents/{job_id}/stop")
     async def stop_torrent(job_id: str) -> JSONResponse:
         try:
@@ -477,7 +642,7 @@ def create_app() -> FastAPI:
             @app.get("/{spa_path:path}", response_model=None)
             async def spa_shell(spa_path: str) -> FileResponse:
                 if spa_path.startswith(
-                    ("torrents", "health", "browse", "search", "ws", "assets/")
+                    ("torrents", "health", "browse", "search", "catalog", "ws", "assets/")
                 ) or spa_path == "assets":
                     raise HTTPException(404, "not found")
                 return FileResponse(_index_html)

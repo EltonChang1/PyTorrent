@@ -1,15 +1,17 @@
 import type { CatalogItem } from "../catalog/types";
 import { posterSrc } from "../catalog/browse";
+import { PosterImage } from "./PosterImage";
 
 type Props = {
   item: CatalogItem | null;
   onMoreInfo: () => void;
-  onAdd: () => void;
-  adding: boolean;
+  onAddFull: () => void;
+  onAddStream: () => void;
+  adding: "full" | "stream" | null;
   canAdd: boolean;
 };
 
-export function HeroBanner({ item, onMoreInfo, onAdd, adding, canAdd }: Props) {
+export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, canAdd }: Props) {
   if (!item) {
     return (
       <div className="hero hero-empty">
@@ -23,12 +25,19 @@ export function HeroBanner({ item, onMoreInfo, onAdd, adding, canAdd }: Props) {
 
   const p = posterSrc(item);
   const title = item.name ?? "Featured";
+  const showBackdrop = Boolean(p || item.imdb_code);
 
   return (
     <div className="hero">
-      {p ? (
+      {showBackdrop ? (
         <>
-          <img src={p} alt="" className="hero-backdrop" />
+          <PosterImage
+            key={item.magnet ?? item.url ?? item.name ?? "hero"}
+            item={item}
+            imgClassName="hero-backdrop"
+            loading="eager"
+            empty={<div className="hero-gradient hero-gradient-solid" />}
+          />
           <div className="hero-gradient" />
         </>
       ) : (
@@ -39,11 +48,26 @@ export function HeroBanner({ item, onMoreInfo, onAdd, adding, canAdd }: Props) {
         <h1 className="hero-title">{title}</h1>
         <div className="hero-actions">
           {canAdd ? (
-            <button type="button" className="btn-hero btn-hero-primary" disabled={adding} onClick={onAdd}>
-              {adding ? "Adding…" : "Add to downloads"}
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn-hero btn-hero-primary"
+                disabled={adding !== null}
+                onClick={onAddFull}
+              >
+                {adding === "full" ? "Adding…" : "Full download"}
+              </button>
+              <button
+                type="button"
+                className="btn-hero btn-hero-secondary"
+                disabled={adding !== null}
+                onClick={onAddStream}
+              >
+                {adding === "stream" ? "Adding…" : "Watch while downloading"}
+              </button>
+            </>
           ) : null}
-          <button type="button" className="btn-hero btn-hero-secondary" onClick={onMoreInfo}>
+          <button type="button" className="btn-hero btn-hero-tertiary" onClick={onMoreInfo}>
             More info
           </button>
         </div>
