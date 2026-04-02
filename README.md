@@ -48,17 +48,18 @@ The web UI (dev or built) polls `/health` and shows a short BitTorrent listener 
 | `PYTORRENT_BT_PORT` | `6881` | BitTorrent TCP listen port (announced to trackers) |
 | `PYTORRENT_BT_BIND` | `0.0.0.0` | Bind address for incoming peer connections |
 | `PYTORRENT_WEB_DIST` | _(auto)_ | Path to built web `dist/` (optional) |
-| `PYTORRENT_SEARCH_API_BASE` | _(empty)_ | Base URL of [Torrent-Api-py](https://github.com/Ryuk-me/Torrent-Api-py) (e.g. `http://127.0.0.1:8009`) for `GET /search` in the daemon |
-| `PYTORRENT_SEARCH_PATH` | `/api/v1/all/search` | Path appended to the base for multi-site search (when `site` is not passed) |
-| `PYTORRENT_SEARCH_API_KEY` | _(empty)_ | Optional `x-api-key` header for upstream APIs that require it |
+| `PYTORRENT_SEARCH_API_BASE` | _(empty)_ | If set, catalog/search use this HTTP base ([Torrent-Api-py](https://github.com/Ryuk-me/Torrent-Api-py)-compatible). If **unset**, PyTorrent runs a **vendored** copy of that API **inside `pytorrentd`** (no separate process). |
+| `PYTORRENT_SEARCH_PATH` | `/api/v1/all/search` | Multi-site search path when using an **external** base (embedded app uses the same default). |
+| `PYTORRENT_SEARCH_API_KEY` | _(empty)_ | Optional `X-API-Key` for catalog requests (embedded or external). Also sets `PYTORRENT_API_KEY` for the vendored API’s auth. |
+| `PYTORRENT_API_KEY` | _(empty)_ | Optional; vendored Torrent-Api-py checks this (see upstream README). Prefer `PYTORRENT_SEARCH_API_KEY` for one knob. |
 
 HTTP(S) tracker requests use `aiohttp` with **`trust_env=True`**, so standard proxy variables (**`HTTP_PROXY`**, **`HTTPS_PROXY`**, **`NO_PROXY`**) apply when set in the daemon’s environment.
 
 ### Magnet links and search
 
 - **Magnets:** `POST /torrents/magnet` with JSON `{"magnet":"magnet:?xt=…&tr=…"}`. The magnet must include at least one `tr=` tracker; the daemon fetches metadata over the peer wire (**ut_metadata**) and then runs like a normal job. UDP and HTTP(S) trackers are used for announces and peer discovery.
-- **Search (optional):** run Torrent-Api-py locally (or any compatible server), set `PYTORRENT_SEARCH_API_BASE`, then use `GET /search?q=…` (optional `site=1337x`, `limit=…`). The web UI shows a search box when `/health` reports `search.configured`. Keep the search API on **localhost** unless you understand the scraping and legal implications.
-- **Browse (same base URL):** the daemon proxies catalog calls to Torrent-Api-py: `GET /browse/sites`, `GET /browse/trending?site=yts&limit=24&category=movies`, `GET /browse/recent?…`, `GET /browse/category?site=1337x&query=…&category=movies`. The **Movies** tab in the web UI uses these to show posters and “Add download”.
+- **Search / browse:** By default the daemon includes a **vendored** Torrent-Api-py tree under `src/pytorrentd/vendor_torrent_api/` (see `VENDOR_README.md` there). `/search`, `/browse/*`, and the web UI work **without** running a separate API server. Set `PYTORRENT_SEARCH_API_BASE` only if you want to offload scraping to another host. Only index content you are allowed to access.
+- **Browse routes:** `GET /browse/sites`, `GET /browse/trending`, `GET /browse/recent`, `GET /browse/category` — same as before; they hit the embedded app in-process or your external base.
 
 ## Desktop (Tauri)
 

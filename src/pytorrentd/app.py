@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -11,7 +10,6 @@ from typing import Any
 
 import aiohttp
 import structlog
-import urllib.parse
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,59 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from pytorrent.bencoding import BencodeError
 from pytorrent.torrent import TorrentMeta
 from pytorrent.session import TorrentSession
+from pytorrentd.torrent_api_client import torrent_api_configured, torrent_api_get_json, torrent_api_search_json
 
 log = structlog.get_logger()
-
-_TORRENT_API_503 = (
-    "Torrent-Api-py is not configured; set PYTORRENT_SEARCH_API_BASE "
-    "(e.g. http://127.0.0.1:8009)"
-)
-
-
-def _torrent_api_base_and_headers() -> tuple[str, dict[str, str]]:
-    base = os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip().rstrip("/")
-    if not base:
-        raise HTTPException(503, _TORRENT_API_503)
-    headers: dict[str, str] = {}
-    key = os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
-    if key:
-        headers["x-api-key"] = key
-    return base, headers
-
-
-async def torrent_api_proxy_get(
-    path: str,
-    params: dict[str, Any],
-    *,
-    timeout_total: int = 90,
-) -> JSONResponse:
-    """GET a path under the configured Torrent-Api-py base; pass through status + JSON body."""
-    base, headers = _torrent_api_base_and_headers()
-    if not path.startswith("/"):
-        path = "/" + path
-    filtered = {k: v for k, v in params.items() if v is not None}
-    qs = urllib.parse.urlencode(filtered)
-    url = f"{base}{path}?{qs}" if qs else f"{base}{path}"
-    try:
-        async with aiohttp.ClientSession(trust_env=True) as sess:
-            async with sess.get(
-                url,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=timeout_total),
-            ) as resp:
-                status = resp.status
-                body = await resp.read()
-    except Exception as e:
-        log.warning("torrent_api_proxy_failed", path=path, err=str(e))
-        raise HTTPException(502, f"upstream request failed: {e}") from e
-    try:
-        data = json.loads(body) if body.strip() else {}
-    except json.JSONDecodeError:
-        raise HTTPException(
-            502,
-            body.decode("utf-8", errors="replace")[:500] or "non-JSON upstream response",
-        ) from None
-    return JSONResponse(content=data, status_code=status)
 
 
 class MagnetAddBody(BaseModel):
@@ -333,7 +281,10 @@ def create_app() -> FastAPI:
         else:
             out["bt_listen"] = {"ok": False, "error": "listener not initialized"}
         out["search"] = {
-            "configured": bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
+            "configured": torrent_api_configured(),
+            "embedded": torrent_api_configured()
+            and not bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
+            "external_base": bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
         }
         return out
 
@@ -425,54 +376,15 @@ def create_app() -> FastAPI:
         site: str | None = None,
         limit: int = 15,
     ) -> JSONResponse:
-        base = os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip().rstrip("/")
-        if not base:
-            raise HTTPException(503, _TORRENT_API_503)
-        if site:
-            path = "/api/v1/search"
-            url = (
-                f"{base}{path}?site={urllib.parse.quote(site)}"
-                f"&query={urllib.parse.quote(q)}&limit={limit}"
-            )
-        else:
-            path = os.environ.get("PYTORRENT_SEARCH_PATH", "/api/v1/all/search").strip()
-            if not path.startswith("/"):
-                path = "/" + path
-            url = f"{base}{path}?query={urllib.parse.quote(q)}&limit={limit}"
-        headers: dict[str, str] = {}
-        key = os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
-        if key:
-            headers["x-api-key"] = key
-        try:
-            async with aiohttp.ClientSession(trust_env=True) as sess:
-                async with sess.get(
-                    url,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=60),
-                ) as resp:
-                    status = resp.status
-                    body = await resp.read()
-        except Exception as e:
-            log.warning("search_proxy_failed", err=str(e))
-            raise HTTPException(502, f"search upstream failed: {e}") from e
-        if status != 200:
-            raise HTTPException(
-                status,
-                body.decode("utf-8", errors="replace")[:800],
-            )
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            raise HTTPException(502, "search upstream returned non-JSON") from None
-        return JSONResponse(data)
+        return await torrent_api_search_json(q=q, site=site, limit=limit, timeout=60.0)
 
     @app.get("/browse/sites")
     async def browse_sites() -> JSONResponse:
-        return await torrent_api_proxy_get("/api/v1/sites", {})
+        return await torrent_api_get_json("/api/v1/sites", {})
 
     @app.get("/browse/sites/config")
     async def browse_sites_config() -> JSONResponse:
-        return await torrent_api_proxy_get("/api/v1/sites/config", {})
+        return await torrent_api_get_json("/api/v1/sites/config", {})
 
     @app.get("/browse/trending")
     async def browse_trending(
@@ -481,7 +393,7 @@ def create_app() -> FastAPI:
         category: str | None = None,
         page: int = 1,
     ) -> JSONResponse:
-        return await torrent_api_proxy_get(
+        return await torrent_api_get_json(
             "/api/v1/trending",
             {"site": site, "limit": limit, "page": page, "category": category},
         )
@@ -493,7 +405,7 @@ def create_app() -> FastAPI:
         category: str | None = None,
         page: int = 1,
     ) -> JSONResponse:
-        return await torrent_api_proxy_get(
+        return await torrent_api_get_json(
             "/api/v1/recent",
             {"site": site, "limit": limit, "page": page, "category": category},
         )
@@ -506,7 +418,7 @@ def create_app() -> FastAPI:
         limit: int = 24,
         page: int = 1,
     ) -> JSONResponse:
-        return await torrent_api_proxy_get(
+        return await torrent_api_get_json(
             "/api/v1/category",
             {
                 "site": site,
