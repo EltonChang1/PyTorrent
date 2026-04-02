@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -10,15 +11,23 @@ from typing import Any
 
 import aiohttp
 import structlog
+import urllib.parse
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from pytorrent.bencoding import BencodeError
 from pytorrent.torrent import TorrentMeta
 from pytorrent.session import TorrentSession
 
 log = structlog.get_logger()
+
+
+class MagnetAddBody(BaseModel):
+    magnet: str = Field(..., min_length=12)
+    download_dir: str | None = None
 
 
 @dataclass
@@ -272,6 +281,9 @@ def create_app() -> FastAPI:
             out["bt_listen"] = bt
         else:
             out["bt_listen"] = {"ok": False, "error": "listener not initialized"}
+        out["search"] = {
+            "configured": bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
+        }
         return out
 
     dist = web_dist_dir()
@@ -315,6 +327,97 @@ def create_app() -> FastAPI:
                 "download_dir": job.download_dir,
             }
         )
+
+    @app.post("/torrents/magnet")
+    async def add_magnet(body: MagnetAddBody) -> JSONResponse:
+        from pytorrent.magnet import parse_magnet
+        from pytorrent.metadata_fetch import fetch_metadata_via_trackers
+        from pytorrent.tracker import make_peer_id
+
+        try:
+            mag = parse_magnet(body.magnet.strip())
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        if not mag.trackers:
+            raise HTTPException(
+                400,
+                "magnet has no tr= trackers; add trackers to the link or use a .torrent file",
+            )
+        listen = int(os.environ.get("PYTORRENT_BT_PORT", "6881"))
+        peer_id = make_peer_id()
+        info_b = await fetch_metadata_via_trackers(mag.trackers, mag.info_hash, peer_id, listen)
+        if not info_b:
+            raise HTTPException(
+                504,
+                "could not fetch metadata from peers (no ut_metadata or timeout)",
+            )
+        try:
+            meta = TorrentMeta.from_resolved_magnet(info_b, mag.trackers)
+        except BencodeError as e:
+            raise HTTPException(400, f"invalid metadata: {e}") from e
+        try:
+            job = await get_registry().add_torrent(meta.raw, body.download_dir)
+        except Exception as e:
+            log.warning("magnet add failed", err=str(e))
+            raise HTTPException(400, str(e)) from e
+        return JSONResponse(
+            {
+                "id": job.id,
+                "name": job.meta.name,
+                "download_dir": job.download_dir,
+            }
+        )
+
+    @app.get("/search")
+    async def search_proxy(
+        q: str,
+        site: str | None = None,
+        limit: int = 15,
+    ) -> JSONResponse:
+        base = os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip().rstrip("/")
+        if not base:
+            raise HTTPException(
+                503,
+                "Torrent-Api-py search is not configured; set PYTORRENT_SEARCH_API_BASE "
+                "(e.g. http://127.0.0.1:8009)",
+            )
+        if site:
+            path = "/api/v1/search"
+            url = (
+                f"{base}{path}?site={urllib.parse.quote(site)}"
+                f"&query={urllib.parse.quote(q)}&limit={limit}"
+            )
+        else:
+            path = os.environ.get("PYTORRENT_SEARCH_PATH", "/api/v1/all/search").strip()
+            if not path.startswith("/"):
+                path = "/" + path
+            url = f"{base}{path}?query={urllib.parse.quote(q)}&limit={limit}"
+        headers: dict[str, str] = {}
+        key = os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
+        if key:
+            headers["x-api-key"] = key
+        try:
+            async with aiohttp.ClientSession(trust_env=True) as sess:
+                async with sess.get(
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    status = resp.status
+                    body = await resp.read()
+        except Exception as e:
+            log.warning("search_proxy_failed", err=str(e))
+            raise HTTPException(502, f"search upstream failed: {e}") from e
+        if status != 200:
+            raise HTTPException(
+                status,
+                body.decode("utf-8", errors="replace")[:800],
+            )
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            raise HTTPException(502, "search upstream returned non-JSON") from None
+        return JSONResponse(data)
 
     @app.post("/torrents/{job_id}/stop")
     async def stop_torrent(job_id: str) -> JSONResponse:

@@ -2,7 +2,7 @@ import pytest
 
 from collections import OrderedDict
 
-from pytorrent.bencoding import BencodeError, Decoder, Encoder
+from pytorrent.bencoding import BencodeError, Decoder, Encoder, bdecode_first
 
 
 def test_int_roundtrip():
@@ -31,3 +31,14 @@ def test_list_dict():
 def test_trailing_rejected():
     with pytest.raises(BencodeError):
         Decoder(b"i4ee").decode()
+
+
+def test_bdecode_first_with_trailing():
+    enc_dict = b"d3:foo3:bare"
+    d, n = bdecode_first(enc_dict + b"i99e")
+    assert n == len(enc_dict)
+    assert isinstance(d, OrderedDict)
+    assert d[b"foo"] == b"bar"
+    d2, n2 = bdecode_first(b"i99eEXTRA")
+    assert d2 == 99
+    assert n2 == 4

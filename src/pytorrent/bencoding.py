@@ -12,6 +12,13 @@ class BencodeError(ValueError):
     pass
 
 
+def bdecode_first(data: bytes) -> tuple[Bencodable, int]:
+    """Decode first bencode value; return (value, bytes_consumed). Allows trailing bytes."""
+    dec = Decoder(data)
+    v = dec._decode_next()
+    return v, dec._i
+
+
 class Decoder:
     def __init__(self, data: bytes):
         self._data = data

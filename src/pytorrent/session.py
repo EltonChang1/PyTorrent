@@ -16,11 +16,58 @@ from pytorrent.piece_state import PieceState
 from pytorrent.protocol.peer import BLOCK_SIZE, run_peer_download
 from pytorrent.storage import DiskStorage
 from pytorrent.torrent import TorrentMeta
-from pytorrent.tracker import TrackerPeer, announce, make_peer_id
+from pytorrent.tracker import TrackerPeer, TrackerResponse, announce, make_peer_id
+from pytorrent.udp_tracker import udp_announce
 
 log = logging.getLogger(__name__)
 
 MAX_PEER_TASKS = 40
+
+
+def _udp_event_code(event: str | None) -> int:
+    if event == "started":
+        return 2
+    if event == "stopped":
+        return 3
+    if event == "completed":
+        return 1
+    return 0
+
+
+async def tracker_announce_url(
+    sess: aiohttp.ClientSession,
+    url: str,
+    info_hash: bytes,
+    peer_id: bytes,
+    port: int,
+    uploaded: int,
+    downloaded: int,
+    left: int,
+    *,
+    event: str | None = None,
+) -> TrackerResponse | None:
+    if url.lower().startswith("udp://"):
+        return await udp_announce(
+            url,
+            info_hash,
+            peer_id,
+            port,
+            uploaded,
+            downloaded,
+            left,
+            event=_udp_event_code(event),
+        )
+    return await announce(
+        sess,
+        url,
+        info_hash,
+        peer_id,
+        port,
+        uploaded,
+        downloaded,
+        left,
+        event=event,
+    )
 ANNOUNCE_MIN_SLEEP = 2.0
 
 ProgressCallback = Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None
@@ -144,7 +191,7 @@ class TorrentSession:
             up = self.uploaded
         for u in urls:
             try:
-                await announce(
+                await tracker_announce_url(
                     sess,
                     u,
                     self.meta.info_hash,
@@ -195,7 +242,7 @@ class TorrentSession:
                 url_i += 1
                 attempts += 1
                 try:
-                    resp = await announce(
+                    resp = await tracker_announce_url(
                         sess,
                         u,
                         self.meta.info_hash,

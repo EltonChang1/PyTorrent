@@ -46,8 +46,16 @@ The web UI (dev or built) polls `/health` and shows a short BitTorrent listener 
 | `PYTORRENT_BT_PORT` | `6881` | BitTorrent TCP listen port (announced to trackers) |
 | `PYTORRENT_BT_BIND` | `0.0.0.0` | Bind address for incoming peer connections |
 | `PYTORRENT_WEB_DIST` | _(auto)_ | Path to built web `dist/` (optional) |
+| `PYTORRENT_SEARCH_API_BASE` | _(empty)_ | Base URL of [Torrent-Api-py](https://github.com/Ryuk-me/Torrent-Api-py) (e.g. `http://127.0.0.1:8009`) for `GET /search` in the daemon |
+| `PYTORRENT_SEARCH_PATH` | `/api/v1/all/search` | Path appended to the base for multi-site search (when `site` is not passed) |
+| `PYTORRENT_SEARCH_API_KEY` | _(empty)_ | Optional `x-api-key` header for upstream APIs that require it |
 
 HTTP(S) tracker requests use `aiohttp` with **`trust_env=True`**, so standard proxy variables (**`HTTP_PROXY`**, **`HTTPS_PROXY`**, **`NO_PROXY`**) apply when set in the daemon’s environment.
+
+### Magnet links and search
+
+- **Magnets:** `POST /torrents/magnet` with JSON `{"magnet":"magnet:?xt=…&tr=…"}`. The magnet must include at least one `tr=` tracker; the daemon fetches metadata over the peer wire (**ut_metadata**) and then runs like a normal job. UDP and HTTP(S) trackers are used for announces and peer discovery.
+- **Search (optional):** run Torrent-Api-py locally (or any compatible server), set `PYTORRENT_SEARCH_API_BASE`, then use `GET /search?q=…` (optional `site=1337x`, `limit=…`). The web UI shows a search box when `/health` reports `search.configured`. Keep the search API on **localhost** unless you understand the scraping and legal implications.
 
 ## Desktop (Tauri)
 
@@ -67,10 +75,9 @@ Release packaging of the Python daemon (PyInstaller) is described in `packaging/
 
 ## Current limitations
 
-- **Trackers:** HTTP(S) announce only (no UDP tracker, DHT, or magnet links yet).
-- **Seeding:** Inbound peers are accepted on **`PYTORRENT_BT_BIND`:` `PYTORRENT_BT_PORT`** (same port announced to the tracker). You must be reachable on that port for remote peers to connect. Outbound `run_peer_seed` remains optional/experimental.
-- **Production hardening:** Rate limits, optional auth for non-localhost API, richer PyInstaller/Tauri integration. **Done:** `event=stopped` to HTTP(S) trackers when you stop/remove a job or shut down the daemon; HTTP(S) proxy env vars for tracker announces.
-- **Next (protocol):** UDP trackers, DHT, and **magnet links** (metadata fetch) are not implemented yet.
+- **DHT:** No mainline DHT yet; magnets need `tr=` trackers for peer discovery.
+- **Seeding:** Inbound peers are accepted on **`PYTORRENT_BT_BIND`:` `PYTORRENT_BT_PORT`** (same port announced to the tracker). You must be reachable on that port for remote peers to connect. Outbound seeding to known peers after download completes is still minimal.
+- **Production hardening:** Rate limits, optional auth for non-localhost API, richer PyInstaller/Tauri integration. **Done:** `event=stopped` to HTTP(S) and UDP trackers when you stop/remove a job or shut down the daemon; HTTP(S) proxy env vars for tracker announces; UDP tracker announces; magnet + ut_metadata; optional search proxy to Torrent-Api-py.
 
 ## License
 

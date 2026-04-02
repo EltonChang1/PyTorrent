@@ -107,6 +107,31 @@ class TorrentMeta:
             announce_list=announce_list,
         )
 
+    @classmethod
+    def from_resolved_magnet(cls, info_bencoded: bytes, trackers: list[str]) -> TorrentMeta:
+        """
+        Build a TorrentMeta after ut_metadata (or similar) delivered the raw *info* dict bytes.
+        ``info_bencoded`` must be the exact blob whose SHA1 is the info hash.
+        """
+        info = Decoder(info_bencoded).decode()
+        if not isinstance(info, OrderedDict):
+            raise BencodeError("info must be a dict")
+        roundtrip = Encoder(info).encode()
+        if roundtrip != info_bencoded:
+            raise BencodeError("info dict does not round-trip; cannot build stable .torrent")
+        root: OrderedDict[bytes, Any] = OrderedDict()
+        root[b"info"] = info
+        if trackers:
+            tb = [t.encode("utf-8") for t in trackers]
+            root[b"announce"] = tb[0]
+            if len(tb) > 1:
+                root[b"announce-list"] = [tb]
+        raw = Encoder(root).encode()
+        meta = cls.from_bytes(raw)
+        if meta.info_hash != hashlib.sha1(info_bencoded).digest():
+            raise BencodeError("info_hash mismatch")
+        return meta
+
     @property
     def num_pieces(self) -> int:
         return len(self.piece_hashes)

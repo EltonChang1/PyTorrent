@@ -90,13 +90,14 @@ async def announce(
 
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            status = resp.status
             body = await resp.read()
     except Exception as e:
         log.warning("tracker request failed: %s", e)
         return None
 
-    if resp.status != 200:
-        log.warning("tracker HTTP %s", resp.status)
+    if status != 200:
+        log.warning("tracker HTTP %s", status)
         return None
 
     try:

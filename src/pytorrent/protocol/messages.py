@@ -13,8 +13,8 @@ class Handshake:
     peer_id: bytes
     pstr: bytes = b"BitTorrent protocol"
 
-    def encode(self) -> bytes:
-        reserved = b"\x00" * 8
+    def encode(self, *, extended: bool = False) -> bytes:
+        reserved = bytes([0, 0, 0, 0, 0, 0x10, 0, 1]) if extended else b"\x00" * 8
         return (
             bytes([len(self.pstr)])
             + self.pstr

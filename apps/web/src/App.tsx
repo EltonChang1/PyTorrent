@@ -20,6 +20,13 @@ type BtListen = {
   error?: string;
 };
 
+type SearchHit = {
+  name?: string;
+  magnet?: string;
+  size?: string;
+  seeders?: string;
+};
+
 /** Vite dev server proxies `/api` → daemon; production serves API on the same origin without `/api`. */
 const API_PREFIX = import.meta.env.DEV ? "/api" : "";
 
@@ -31,6 +38,11 @@ export default function App() {
   const [log, setLog] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [btListen, setBtListen] = useState<BtListen | null>(null);
+  const [searchConfigured, setSearchConfigured] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const [magnetField, setMagnetField] = useState("");
 
   const pushLog = useCallback((line: string) => {
     setLog((prev) => [...prev.slice(-200), line]);
@@ -40,8 +52,9 @@ export default function App() {
     try {
       const r = await api("/health");
       if (!r.ok) return;
-      const j = (await r.json()) as { bt_listen?: BtListen };
+      const j = (await r.json()) as { bt_listen?: BtListen; search?: { configured?: boolean } };
       if (j.bt_listen) setBtListen(j.bt_listen);
+      setSearchConfigured(Boolean(j.search?.configured));
     } catch {
       setBtListen({ ok: false, error: "could not reach /health" });
     }
@@ -93,6 +106,41 @@ export default function App() {
     return () => ws.close();
   }, [pushLog, refresh]);
 
+  async function submitMagnet(uri?: string) {
+    const m = (uri ?? magnetField).trim();
+    if (!m) return;
+    const r = await api("/torrents/magnet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ magnet: m }),
+    });
+    if (!r.ok) {
+      pushLog(`Magnet add failed: ${await r.text()}`);
+      return;
+    }
+    pushLog(`Magnet added: ${JSON.stringify(await r.json())}`);
+    setMagnetField("");
+    refresh();
+  }
+
+  async function runSearch() {
+    const q = searchQ.trim();
+    if (!q) return;
+    setSearchBusy(true);
+    try {
+      const r = await api(`/search?q=${encodeURIComponent(q)}&limit=20`);
+      if (!r.ok) {
+        pushLog(`Search failed: ${await r.text()}`);
+        setSearchHits([]);
+        return;
+      }
+      const j = (await r.json()) as { data?: SearchHit[] };
+      setSearchHits(Array.isArray(j.data) ? j.data : []);
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -136,6 +184,79 @@ export default function App() {
         Add torrent:{" "}
         <input type="file" accept=".torrent,application/x-bittorrent" onChange={onFile} />
       </label>
+
+      <div style={{ marginTop: "1rem" }}>
+        <label>
+          Magnet link (needs <code>tr=</code> trackers):{" "}
+          <input
+            type="text"
+            size={72}
+            value={magnetField}
+            onChange={(e) => setMagnetField(e.target.value)}
+            placeholder="magnet:?xt=urn:btih:…"
+          />
+        </label>{" "}
+        <button type="button" onClick={() => submitMagnet()}>
+          Add magnet
+        </button>
+      </div>
+
+      <section style={{ marginTop: "1.5rem" }}>
+        <h2 style={{ fontSize: "1.1rem" }}>Search</h2>
+        {!searchConfigured ? (
+          <p style={{ color: "#666", fontSize: "0.95rem" }}>
+            Search is off. Run{" "}
+            <a href="https://github.com/Ryuk-me/Torrent-Api-py">Torrent-Api-py</a> locally and set{" "}
+            <code>PYTORRENT_SEARCH_API_BASE</code> (e.g. <code>http://127.0.0.1:8009</code>), then restart{" "}
+            <code>pytorrentd</code>.
+          </p>
+        ) : (
+          <>
+            <label>
+              Query:{" "}
+              <input
+                type="search"
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && runSearch()}
+              />
+            </label>{" "}
+            <button type="button" disabled={searchBusy} onClick={() => runSearch()}>
+              {searchBusy ? "Searching…" : "Search"}
+            </button>
+            {searchHits.length > 0 && (
+              <table style={{ marginTop: "0.75rem" }}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Size</th>
+                    <th>Seeders</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {searchHits.map((row, i) => (
+                    <tr key={i}>
+                      <td>{row.name ?? "—"}</td>
+                      <td>{row.size ?? "—"}</td>
+                      <td>{row.seeders ?? "—"}</td>
+                      <td>
+                        {row.magnet ? (
+                          <button type="button" onClick={() => submitMagnet(row.magnet)}>
+                            Add
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+      </section>
 
       <table>
         <thead>
