@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CatalogItem } from "../catalog/types";
 import { posterSrc } from "../catalog/browse";
 import { PosterImage } from "./PosterImage";
+import { isInMyList, subscribeMyList, toggleMyList } from "../lib/myList";
 
 type Props = {
   item: CatalogItem | null;
@@ -19,6 +20,10 @@ function optionLabel(t: NonNullable<CatalogItem["torrents"]>[number]): string {
 
 export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding }: Props) {
   const [selectedMagnet, setSelectedMagnet] = useState("");
+  const [, setListRev] = useState(0);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => subscribeMyList(() => setListRev((x) => x + 1)), []);
 
   const options = item?.torrents;
   const hasPicker = Boolean(options && options.length > 0);
@@ -50,6 +55,34 @@ export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding
     return () => window.removeEventListener("keydown", onKey);
   }, [item, onClose]);
 
+  useEffect(() => {
+    if (!item) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusables = panel.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const elts = [...focusables];
+    const first = elts[0];
+    const last = elts[elts.length - 1];
+    first?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || elts.length === 0) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    };
+    panel.addEventListener("keydown", onKey);
+    return () => panel.removeEventListener("keydown", onKey);
+  }, [item]);
+
   if (!item) return null;
 
   const p = posterSrc(item);
@@ -57,11 +90,12 @@ export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding
   const showPoster = Boolean(p || item.imdb_code);
   const canAdd = Boolean(effectiveMagnet);
   const showPrimarySourceButton = Boolean(item.url && !hasPicker);
+  const onList = isInMyList(item);
 
   return (
     <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <button type="button" className="modal-backdrop" aria-label="Close" onClick={onClose} />
-      <div className="modal-panel">
+      <div className="modal-panel" ref={panelRef}>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
           ×
         </button>
@@ -89,6 +123,16 @@ export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding
               {item.leechers != null && item.leechers !== "" ? <li>{item.leechers} leechers</li> : null}
               {item.category ? <li>{item.category}</li> : null}
             </ul>
+            <div className="modal-toolbar">
+              <button
+                type="button"
+                className="btn-secondary"
+                aria-pressed={onList}
+                onClick={() => toggleMyList(item)}
+              >
+                {onList ? "♥ In My List" : "♡ Add to My List"}
+              </button>
+            </div>
             {hasPicker ? (
               <div className="modal-field">
                 <label htmlFor="modal-quality" className="modal-label">

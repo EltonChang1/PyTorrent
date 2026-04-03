@@ -2,36 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
 import type { CatalogItem } from "../catalog/types";
-import { fetchBrowseRow, fetchYtsCuratedList, type YtsCuratedParams } from "../catalog/browse";
+import { fetchBrowseRow } from "../catalog/browse";
+import {
+  ALL_PRIMARY_ROW_KEYS,
+  buildPrimaryRowSpecs,
+  fetchPrimarySpec,
+  filterVisibleSpecs,
+  sortSpecsByRowOrder,
+  type PrimaryRowSpec,
+} from "../catalog/homeRowSpecs";
 import { HeroBanner } from "../components/HeroBanner";
 import { ContentRow } from "../components/ContentRow";
 import { TitleDetailModal } from "../components/TitleDetailModal";
 import { ContinueWatchingRow } from "../components/ContinueWatchingRow";
 import { ResumePlaybackRow } from "../components/ResumePlaybackRow";
+import { MyListRow } from "../components/MyListRow";
 import type { DashboardSettings } from "../lib/dashboardSettings";
 import { defaultDashboardSettings, loadGuestDashboard } from "../lib/dashboardSettings";
-
-type RowSource =
-  | { kind: "browse"; browse: "trending" | "recent"; site: string }
-  | { kind: "ytsJson"; params: YtsCuratedParams }
-  | { kind: "recommend" };
-
-type PrimaryRowSpec = { key: string; title: string; source: RowSource };
-
-const STATIC_PRIMARY_ROWS: PrimaryRowSpec[] = [
-  { key: "yts-trend", title: "Trending on YTS", source: { kind: "browse", browse: "trending", site: "yts" } },
-  { key: "yts-recent", title: "Recently added (YTS)", source: { kind: "browse", browse: "recent", site: "yts" } },
-  { key: "yts-horror", title: "Horror on YTS", source: { kind: "ytsJson", params: { genre: "Horror" } } },
-  { key: "yts-comedy", title: "Comedy on YTS", source: { kind: "ytsJson", params: { genre: "Comedy" } } },
-  { key: "yts-scifi", title: "Sci-Fi on YTS", source: { kind: "ytsJson", params: { genre: "Sci-Fi" } } },
-  { key: "yts-action", title: "Action on YTS", source: { kind: "ytsJson", params: { genre: "Action" } } },
-  {
-    key: "yts-classics",
-    title: "Highly rated classics",
-    source: { kind: "ytsJson", params: { sort_by: "year", order_by: "asc", minimum_rating: 7 } },
-  },
-  { key: "yts-for-you", title: "Picked for you", source: { kind: "recommend" } },
-];
+import { saveJobCatalogSnapshot } from "../lib/jobMeta";
+import { getLastCatalogTitle, setLastCatalogTitle, subscribeLastCatalogTitle } from "../lib/lastCatalogTitle";
+import { isInMyList, setMyListAll, toggleMyList } from "../lib/myList";
 
 const BACKUP_HOME_ROWS = [
   { key: "tgx-trend", title: "Trending on TorrentGalaxy", kind: "trending" as const, site: "tgx" },
@@ -41,40 +31,21 @@ const BACKUP_HOME_ROWS = [
   { key: "kickass-trend", title: "Trending — Kickass", kind: "trending" as const, site: "kickass" },
 ] as const;
 
-const PRIMARY_KEYS = STATIC_PRIMARY_ROWS.map((r) => r.key);
-const ALL_KEYS = [...PRIMARY_KEYS, ...BACKUP_HOME_ROWS.map((r) => r.key)] as string[];
+const BACKUP_KEYS = BACKUP_HOME_ROWS.map((r) => r.key);
+const ALL_KEYS = [...new Set([...ALL_PRIMARY_ROW_KEYS, ...BACKUP_KEYS])];
+
+type BackupSpec = (typeof BACKUP_HOME_ROWS)[number];
+type RenderSpec = PrimaryRowSpec | BackupSpec;
 
 type RowState = { items: CatalogItem[]; loading: boolean; error?: string };
 
 function emptyRows(loadingYts: boolean): Record<string, RowState> {
   const o: Record<string, RowState> = {};
   for (const k of ALL_KEYS) {
-    const isYts = k.startsWith("yts-");
-    o[k] = { items: [], loading: isYts ? loadingYts : false };
+    const isPrimary = ALL_PRIMARY_ROW_KEYS.includes(k);
+    o[k] = { items: [], loading: isPrimary ? loadingYts : false };
   }
   return o;
-}
-
-async function fetchPrimarySpec(
-  api: AppOutletContext["api"],
-  spec: PrimaryRowSpec,
-  dash: DashboardSettings,
-): Promise<{ spec: PrimaryRowSpec; items: CatalogItem[]; error?: string }> {
-  try {
-    if (spec.source.kind === "browse") {
-      const r = await fetchBrowseRow(api, spec.source.browse, spec.source.site);
-      return { spec, items: r.items, error: r.error };
-    }
-    if (spec.source.kind === "ytsJson") {
-      const r = await fetchYtsCuratedList(api, spec.source.params);
-      return { spec, items: r.items, error: r.error };
-    }
-    const g = dash.favoriteGenres[0] || "Horror";
-    const r = await fetchYtsCuratedList(api, { genre: g, sort_by: "download_count" });
-    return { spec, items: r.items, error: r.error };
-  } catch (e) {
-    return { spec, items: [], error: String(e) };
-  }
 }
 
 export function HomePage() {
@@ -89,6 +60,20 @@ export function HomePage() {
   const [heroItem, setHeroItem] = useState<CatalogItem | null>(null);
   const [heroIdx, setHeroIdx] = useState(0);
   const [adding, setAdding] = useState<"full" | "stream" | null>(null);
+  const [similarQ, setSimilarQ] = useState<string | null>(() => getLastCatalogTitle());
+  const [refetchTick, setRefetchTick] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => subscribeLastCatalogTitle(() => setSimilarQ(getLastCatalogTitle())), []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const fn = () => setReducedMotion(mq.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
 
   useEffect(() => {
     if (user === undefined) return;
@@ -101,8 +86,11 @@ export function HomePage() {
       try {
         const r = await api("/user/settings");
         if (!r.ok || cancelled) return;
-        const j = (await r.json()) as DashboardSettings;
-        if (!cancelled) setDash({ ...defaultDashboardSettings(), ...j });
+        const j = (await r.json()) as Partial<DashboardSettings> & { myList?: CatalogItem[] };
+        if (!cancelled) {
+          setDash({ ...defaultDashboardSettings(), ...j });
+          if (Array.isArray(j.myList)) setMyListAll(j.myList);
+        }
       } catch {
         if (!cancelled) setDash(loadGuestDashboard());
       }
@@ -112,23 +100,25 @@ export function HomePage() {
     };
   }, [api, user]);
 
-  const visiblePrimarySpecs = useMemo(() => {
-    return STATIC_PRIMARY_ROWS.filter((spec) => {
-      if (dash.hiddenRowKeys.includes(spec.key)) return false;
-      if (spec.key === "yts-for-you" && !dash.showRecommendations) return false;
-      return true;
-    });
-  }, [dash.hiddenRowKeys, dash.showRecommendations]);
+  const displaySpecs = useMemo(() => {
+    const all = buildPrimaryRowSpecs(dash);
+    const vis = filterVisibleSpecs(all, dash, similarQ);
+    const sorted = sortSpecsByRowOrder(vis.length ? vis : all.slice(0, 2), dash.rowOrder);
+    return sorted;
+  }, [
+    dash.hiddenRowKeys,
+    dash.favoriteGenres,
+    dash.showRecommendations,
+    dash.rowOrder,
+    similarQ,
+  ]);
 
   useEffect(() => {
     if (!searchConfigured) return;
     let cancelled = false;
     (async () => {
-      const specs =
-        visiblePrimarySpecs.length > 0
-          ? visiblePrimarySpecs
-          : STATIC_PRIMARY_ROWS.slice(0, 2);
-      const results = await Promise.all(specs.map((spec) => fetchPrimarySpec(api, spec, dash)));
+      const specs = displaySpecs;
+      const results = await Promise.all(specs.map((spec) => fetchPrimarySpec(api, spec, similarQ)));
       if (cancelled) return;
 
       const trend = results.find((x) => x.spec.key === "yts-trend");
@@ -142,7 +132,7 @@ export function HomePage() {
         if (cancelled) return;
         setRows(() => {
           const next = emptyRows(false);
-          for (const k of PRIMARY_KEYS) {
+          for (const k of ALL_PRIMARY_ROW_KEYS) {
             next[k] = { items: [], loading: false };
           }
           for (const br of results) {
@@ -162,7 +152,7 @@ export function HomePage() {
       if (cancelled) return;
       setRows((prev) => {
         const next = { ...prev };
-        for (const k of PRIMARY_KEYS) {
+        for (const k of ALL_PRIMARY_ROW_KEYS) {
           next[k] = { items: [], loading: false };
         }
         for (const br of results) {
@@ -177,7 +167,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [api, searchConfigured, visiblePrimarySpecs, dash.favoriteGenres.join("|"), dash.showRecommendations]);
+  }, [api, searchConfigured, displaySpecs, similarQ, refetchTick]);
 
   const heroPool = useMemo(() => {
     const trend = rows["yts-trend"]?.items ?? [];
@@ -189,12 +179,13 @@ export function HomePage() {
   }, [heroPool.length]);
 
   useEffect(() => {
+    if (reducedMotion) return;
     if (heroPool.length <= 1) return;
     const id = window.setInterval(() => {
       setHeroIdx((i) => (i + 1) % heroPool.length);
     }, 14000);
     return () => window.clearInterval(id);
-  }, [heroPool.length]);
+  }, [heroPool.length, reducedMotion]);
 
   useEffect(() => {
     const fromTrend = heroPool[heroIdx] ?? heroPool[0];
@@ -215,7 +206,7 @@ export function HomePage() {
   }, [rows, catalogFallback, heroPool, heroIdx]);
 
   const addMagnet = useCallback(
-    async (magnet: string, mode: "full" | "stream") => {
+    async (magnet: string, mode: "full" | "stream", catalogItem: CatalogItem | null = null) => {
       setAdding(mode);
       try {
         const r = await api("/torrents/magnet", {
@@ -228,7 +219,9 @@ export function HomePage() {
           return;
         }
         const j = (await r.json()) as { name?: string; id?: string };
-        showToast(`Added: ${j.name ?? "torrent"}`, "ok");
+        if (j.id && catalogItem) saveJobCatalogSnapshot(j.id, catalogItem);
+        setLastCatalogTitle(catalogItem?.name ?? j.name ?? null);
+        showToast(`Added: ${j.name ?? "torrent"}`, "ok", { label: "My downloads", to: "/downloads" });
         setSelected(null);
         await refreshTorrents();
         if (mode === "stream" && j.id) navigate(`/watch?id=${encodeURIComponent(j.id)}`);
@@ -241,10 +234,14 @@ export function HomePage() {
 
   const openDetail = useCallback((item: CatalogItem) => setSelected(item), []);
 
-  type RenderSpec = PrimaryRowSpec | (typeof BACKUP_HOME_ROWS)[number];
-  const rowsToRender: RenderSpec[] = catalogFallback
-    ? [...STATIC_PRIMARY_ROWS, ...BACKUP_HOME_ROWS]
-    : visiblePrimarySpecs;
+  const rowsToRender: RenderSpec[] = useMemo(() => {
+    if (catalogFallback) {
+      return [...buildPrimaryRowSpecs(dash), ...BACKUP_HOME_ROWS];
+    }
+    return displaySpecs;
+  }, [catalogFallback, dash, displaySpecs]);
+
+  const bumpRefetch = useCallback(() => setRefetchTick((t) => t + 1), []);
 
   if (!searchConfigured) {
     return (
@@ -263,6 +260,9 @@ export function HomePage() {
     );
   }
 
+  let stagger = 0;
+  const nextStagger = () => ++stagger;
+
   return (
     <div className="page-home">
       <HeroBanner
@@ -274,7 +274,7 @@ export function HomePage() {
             setSelected(heroItem);
             return;
           }
-          void addMagnet(heroItem.magnet, "full");
+          void addMagnet(heroItem.magnet, "full", heroItem);
         }}
         onAddStream={() => {
           if (!heroItem?.magnet) return;
@@ -282,7 +282,7 @@ export function HomePage() {
             setSelected(heroItem);
             return;
           }
-          void addMagnet(heroItem.magnet, "stream");
+          void addMagnet(heroItem.magnet, "stream", heroItem);
         }}
         adding={adding}
         canAdd={Boolean(heroItem?.magnet)}
@@ -298,6 +298,7 @@ export function HomePage() {
       <div className="page-home-rows">
         <ResumePlaybackRow />
         <ContinueWatchingRow jobs={torrentRows} />
+        <MyListRow onSelect={openDetail} staggerIndex={nextStagger()} />
 
         {rowsToRender.map((spec) => {
           const st = rows[spec.key] ?? { items: [], loading: true };
@@ -310,6 +311,14 @@ export function HomePage() {
               loading={st.loading}
               error={st.error}
               onSelect={openDetail}
+              onRetry={bumpRefetch}
+              staggerIndex={nextStagger()}
+              showTop10Rank={spec.key === "yts-top10"}
+              myListEnabled
+              isInMyList={isInMyList}
+              onMyListToggle={(item) => {
+                toggleMyList(item);
+              }}
             />
           );
         })}
@@ -318,8 +327,8 @@ export function HomePage() {
       <TitleDetailModal
         item={selected}
         onClose={() => setSelected(null)}
-        onAddFull={(m) => addMagnet(m, "full")}
-        onAddStream={(m) => addMagnet(m, "stream")}
+        onAddFull={(m) => addMagnet(m, "full", selected)}
+        onAddStream={(m) => addMagnet(m, "stream", selected)}
         adding={adding}
       />
     </div>

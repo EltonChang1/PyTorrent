@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Link, Outlet, NavLink, useNavigate } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
+import { OnboardingModal } from "../components/OnboardingModal";
 
 type BtListen = {
   ok: boolean;
@@ -16,7 +17,7 @@ type Props = {
   searchConfigured: boolean;
   connected: boolean;
   btListen: BtListen | null;
-  toast: { msg: string; kind: "ok" | "err" } | null;
+  toast: { msg: string; kind: "ok" | "err"; action?: { label: string; to: string } } | null;
   onDismissToast: () => void;
 };
 
@@ -99,10 +100,19 @@ export function AppLayout({
         </div>
       </header>
 
+      <OnboardingModal />
+
       {toast && (
         <div className="nf-toast-wrap">
           <div className={toast.kind === "err" ? "toast toast-err" : "toast toast-ok"} role="status">
-            <span>{toast.msg}</span>
+            <div className="toast-body">
+              <span>{toast.msg}</span>
+              {toast.action ? (
+                <Link className="toast-action" to={toast.action.to} onClick={onDismissToast}>
+                  {toast.action.label}
+                </Link>
+              ) : null}
+            </div>
             <button type="button" className="toast-dismiss" onClick={onDismissToast} aria-label="Dismiss">
               ×
             </button>

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
+import { catalogItemFromSnapshot, loadJobCatalogSnapshot } from "../lib/jobMeta";
 import { listLocalProgressEntries } from "../lib/watchProgress";
+import { posterSrc } from "../catalog/browse";
+import { PosterImage } from "./PosterImage";
 
 type ServerProg = {
   job_id: string;
@@ -91,16 +94,35 @@ export function ResumePlaybackRow() {
       <div className="row-scroll row-scroll-cw">
         {cards.map((c) => {
           const p = pct(c.position, c.duration);
+          const snap = loadJobCatalogSnapshot(c.jobId);
+          const posterItem = snap ? catalogItemFromSnapshot(snap) : null;
+          const showThumb = posterItem && (posterSrc(posterItem) || posterItem.imdb_code);
           return (
-            <Link key={c.jobId} to={`/watch?id=${encodeURIComponent(c.jobId)}`} className="cw-card resume-play-card">
-              <div className="cw-card-top">
-                <span className="cw-card-title" title={c.title}>
-                  {c.title}
-                </span>
-                <span className="cw-card-pct">{p.toFixed(0)}%</span>
-              </div>
-              <div className="cw-bar" role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}>
-                <div className="cw-bar-fill" style={{ width: `${p}%` }} />
+            <Link
+              key={c.jobId}
+              to={`/watch?id=${encodeURIComponent(c.jobId)}`}
+              className={`cw-card resume-play-card${showThumb ? " cw-card-with-poster" : ""}`}
+            >
+              {showThumb && posterItem ? (
+                <div className="cw-card-thumb" aria-hidden>
+                  <PosterImage
+                    item={posterItem}
+                    imgClassName="cw-card-thumb-img"
+                    loading="lazy"
+                    empty={<div className="cw-card-thumb-ph">{c.title.slice(0, 1)}</div>}
+                  />
+                </div>
+              ) : null}
+              <div className="cw-card-main">
+                <div className="cw-card-top">
+                  <span className="cw-card-title" title={c.title}>
+                    {c.title}
+                  </span>
+                  <span className="cw-card-pct">{p.toFixed(0)}%</span>
+                </div>
+                <div className="cw-bar" role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="cw-bar-fill" style={{ width: `${p}%` }} />
+                </div>
               </div>
             </Link>
           );

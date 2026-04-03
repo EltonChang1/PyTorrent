@@ -15,9 +15,11 @@ export type TorrentJob = {
 
 export type AuthUser = { id: number; username: string };
 
+export type ToastAction = { label: string; to: string };
+
 export type AppOutletContext = {
   api: ApiFn;
-  showToast: (msg: string, kind?: "ok" | "err") => void;
+  showToast: (msg: string, kind?: "ok" | "err", action?: ToastAction) => void;
   refreshTorrents: () => Promise<void>;
   torrentRows: TorrentJob[];
   searchConfigured: boolean;

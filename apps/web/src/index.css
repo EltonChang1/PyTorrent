@@ -122,6 +122,24 @@ code {
   margin-top: 0.5rem;
 }
 
+.toast-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+}
+
+.toast-action {
+  font-weight: 600;
+  color: #e8f4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.toast-action:hover {
+  color: #fff;
+}
+
 .toast-dismiss {
   background: transparent;
   border: none;
@@ -161,6 +179,51 @@ code {
   margin: 0 auto;
   padding: 0 1.5rem 1rem;
   font-size: 0.85rem;
+}
+
+.onb-root {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.onb-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  border: none;
+  cursor: pointer;
+}
+
+.onb-panel {
+  position: relative;
+  z-index: 1;
+  max-width: 26rem;
+  width: 100%;
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.onb-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+}
+
+.onb-body {
+  margin: 0 0 1.25rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.onb-cta {
+  width: 100%;
 }
 
 .nf-footer {
@@ -348,6 +411,32 @@ code {
   margin-bottom: 1.75rem;
 }
 
+@keyframes row-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.content-row-stagger {
+  animation: row-fade-in 0.5s ease both;
+  animation-delay: var(--stagger, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-row-stagger {
+    animation: none;
+  }
+
+  .poster-card:hover {
+    transform: none;
+  }
+}
+
 .row-heading {
   margin: 0 0 0.65rem;
   font-size: 1.05rem;
@@ -388,10 +477,15 @@ code {
 }
 
 /* Poster tiles */
-.poster-card {
+.poster-card-wrap {
+  position: relative;
   flex: 0 0 auto;
   width: 140px;
   scroll-snap-align: start;
+}
+
+.poster-card {
+  width: 100%;
   background: transparent;
   border: none;
   padding: 0;
@@ -404,6 +498,55 @@ code {
 .poster-card:hover {
   transform: scale(1.06);
   z-index: 2;
+}
+
+.poster-rank-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #e50914, #b20710);
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.poster-mylist-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.poster-mylist-btn:hover {
+  background: rgba(229, 9, 20, 0.85);
+  transform: scale(1.08);
+}
+
+.poster-mylist-btn[aria-pressed="true"] {
+  background: rgba(229, 9, 20, 0.9);
 }
 
 .poster-card:focus-visible {
@@ -500,6 +643,51 @@ code {
 
 .cw-card:hover {
   background: #3d3d3d;
+}
+
+.cw-card-with-poster {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+  width: 260px;
+}
+
+.cw-card-thumb {
+  width: 64px;
+  flex-shrink: 0;
+  background: #222;
+  align-self: stretch;
+}
+
+.cw-card-thumb-img {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cw-card-thumb-ph {
+  width: 100%;
+  min-height: 72px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #666;
+  background: #2a2a2a;
+}
+
+.cw-card-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .cw-card-top {
@@ -1040,6 +1228,28 @@ button:hover {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.account-row-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+
+.account-row-move {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.row-retry {
+  margin-top: 0.5rem;
+}
+
+.modal-toolbar {
+  margin-bottom: 0.75rem;
 }
 
 .account-actions {

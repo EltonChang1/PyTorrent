@@ -3,6 +3,8 @@ import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom
 import type { AppOutletContext } from "../appOutletContext";
 import type { CatalogItem } from "../catalog/types";
 import { TitleDetailModal } from "../components/TitleDetailModal";
+import { saveJobCatalogSnapshot } from "../lib/jobMeta";
+import { setLastCatalogTitle } from "../lib/lastCatalogTitle";
 
 const SITE_PRESETS = [
   { id: "", label: "All sites (aggregated)" },
@@ -81,7 +83,7 @@ export function SearchPage() {
   );
 
   const addMagnet = useCallback(
-    async (magnet: string, mode: "full" | "stream") => {
+    async (magnet: string, mode: "full" | "stream", catalogItem: CatalogItem | null = null) => {
       setAdding(mode);
       try {
         const r = await api("/torrents/magnet", {
@@ -94,7 +96,9 @@ export function SearchPage() {
           return;
         }
         const j = (await r.json()) as { name?: string; id?: string };
-        showToast(`Added: ${j.name ?? "torrent"}`, "ok");
+        if (j.id && catalogItem) saveJobCatalogSnapshot(j.id, catalogItem);
+        setLastCatalogTitle(catalogItem?.name ?? j.name ?? null);
+        showToast(`Added: ${j.name ?? "torrent"}`, "ok", { label: "My downloads", to: "/downloads" });
         setSelected(null);
         await refreshTorrents();
         if (mode === "stream" && j.id) navigate(`/watch?id=${encodeURIComponent(j.id)}`);
@@ -171,8 +175,8 @@ export function SearchPage() {
       <TitleDetailModal
         item={selected}
         onClose={() => setSelected(null)}
-        onAddFull={(m) => addMagnet(m, "full")}
-        onAddStream={(m) => addMagnet(m, "stream")}
+        onAddFull={(m) => addMagnet(m, "full", selected)}
+        onAddStream={(m) => addMagnet(m, "stream", selected)}
         adding={adding}
       />
     </div>

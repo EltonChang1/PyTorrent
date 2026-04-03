@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import type { AppOutletContext, AuthUser, TorrentJob } from "./appOutletContext";
+import type { AppOutletContext, AuthUser, ToastAction, TorrentJob } from "./appOutletContext";
 import { AppLayout } from "./layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
 import { SearchPage } from "./pages/SearchPage";
@@ -30,7 +30,7 @@ function AppRoutes() {
   const [connected, setConnected] = useState(false);
   const [btListen, setBtListen] = useState<BtListen | null>(null);
   const [searchConfigured, setSearchConfigured] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err"; action?: ToastAction } | null>(null);
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
 
   const pushLog = useCallback((line: string) => {
@@ -38,8 +38,8 @@ function AppRoutes() {
   }, []);
 
   const showToast = useCallback(
-    (msg: string, kind: "ok" | "err" = "ok") => {
-      setToast({ msg, kind });
+    (msg: string, kind: "ok" | "err" = "ok", action?: ToastAction) => {
+      setToast({ msg, kind, action });
       pushLog(`[${kind}] ${msg}`);
     },
     [pushLog],

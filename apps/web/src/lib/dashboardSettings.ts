@@ -4,6 +4,8 @@ export type DashboardSettings = {
   favoriteGenres: string[];
   hiddenRowKeys: string[];
   showRecommendations: boolean;
+  /** Home primary row keys in display order; empty = default catalog order */
+  rowOrder: string[];
 };
 
 const GUEST_KEY = "pyt_guest_dashboard";
@@ -12,6 +14,7 @@ export const defaultDashboardSettings = (): DashboardSettings => ({
   favoriteGenres: ["Horror", "Comedy"],
   hiddenRowKeys: [],
   showRecommendations: true,
+  rowOrder: [],
 });
 
 export function loadGuestDashboard(): DashboardSettings {

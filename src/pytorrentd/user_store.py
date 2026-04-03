@@ -194,11 +194,16 @@ def default_settings() -> dict[str, Any]:
         "favoriteGenres": ["Horror", "Comedy"],
         "hiddenRowKeys": [],
         "showRecommendations": True,
+        "rowOrder": [],
+        "myList": [],
     }
 
 
 def save_settings(user_id: int, data: dict[str, Any]) -> None:
     merged = {**default_settings(), **data}
+    ml = merged.get("myList")
+    if isinstance(ml, list):
+        merged["myList"] = ml[:80]
     conn = _connect()
     try:
         conn.execute(

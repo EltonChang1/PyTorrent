@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
-import { HOME_ROW_OPTIONS } from "../catalog/homeRowsConfig";
+import { HOME_ROW_OPTIONS, normalizeHomeRowOrder } from "../catalog/homeRowsConfig";
+import type { CatalogItem } from "../catalog/types";
 import type { DashboardSettings } from "../lib/dashboardSettings";
 import {
   defaultDashboardSettings,
   loadGuestDashboard,
   saveGuestDashboard,
 } from "../lib/dashboardSettings";
+import { getMyList, setMyListAll } from "../lib/myList";
 
 export function AccountPage() {
   const { api, showToast, user, refreshUser } = useOutletContext<AppOutletContext>();
@@ -15,6 +17,7 @@ export function AccountPage() {
   const [genres, setGenres] = useState("");
   const [showRec, setShowRec] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [rowOrder, setRowOrder] = useState<string[]>(() => normalizeHomeRowOrder([]));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -24,6 +27,7 @@ export function AccountPage() {
       setGenres(g.favoriteGenres.join(", "));
       setShowRec(g.showRecommendations);
       setHidden(new Set(g.hiddenRowKeys));
+      setRowOrder(normalizeHomeRowOrder(g.rowOrder));
       return;
     }
     let cancelled = false;
@@ -31,12 +35,14 @@ export function AccountPage() {
       try {
         const r = await api("/user/settings");
         if (!r.ok || cancelled) return;
-        const s = (await r.json()) as DashboardSettings;
+        const s = (await r.json()) as DashboardSettings & { myList?: CatalogItem[] };
         const merged = { ...defaultDashboardSettings(), ...s };
         if (!cancelled) {
           setGenres(merged.favoriteGenres.join(", "));
           setShowRec(merged.showRecommendations);
           setHidden(new Set(merged.hiddenRowKeys));
+          setRowOrder(normalizeHomeRowOrder(merged.rowOrder));
+          if (Array.isArray(s.myList)) setMyListAll(s.myList);
         }
       } catch {
         /* ignore */
@@ -56,6 +62,18 @@ export function AccountPage() {
     });
   }
 
+  function moveRow(key: string, dir: -1 | 1) {
+    setRowOrder((prev) => {
+      const i = prev.indexOf(key);
+      if (i < 0) return prev;
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
   async function save() {
     const favoriteGenres = genres
       .split(/[,]+/)
@@ -66,6 +84,7 @@ export function AccountPage() {
       favoriteGenres: favoriteGenres.length ? favoriteGenres : defaultDashboardSettings().favoriteGenres,
       hiddenRowKeys,
       showRecommendations: showRec,
+      rowOrder: normalizeHomeRowOrder(rowOrder),
     };
     setBusy(true);
     try {
@@ -73,7 +92,7 @@ export function AccountPage() {
         const r = await api("/user/settings", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, myList: getMyList() }),
         });
         if (!r.ok) {
           showToast(await r.text(), "err");
@@ -126,16 +145,40 @@ export function AccountPage() {
 
       <section className="account-section">
         <h2 className="account-h2">Home rows</h2>
-        <p className="muted small">Uncheck to hide a row from the home page.</p>
+        <p className="muted small">Uncheck to hide a row. Use arrows to change order on the home page.</p>
         <ul className="account-row-list">
-          {HOME_ROW_OPTIONS.map((row) => (
-            <li key={row.key}>
-              <label className="account-check">
-                <input type="checkbox" checked={!hidden.has(row.key)} onChange={() => toggleRow(row.key)} />
-                {row.label}
-              </label>
-            </li>
-          ))}
+          {rowOrder.map((key, idx) => {
+            const row = HOME_ROW_OPTIONS.find((r) => r.key === key);
+            if (!row) return null;
+            return (
+              <li key={row.key} className="account-row-item">
+                <label className="account-check">
+                  <input type="checkbox" checked={!hidden.has(row.key)} onChange={() => toggleRow(row.key)} />
+                  {row.label}
+                </label>
+                <span className="account-row-move">
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    disabled={idx === 0}
+                    aria-label={`Move ${row.label} up`}
+                    onClick={() => moveRow(row.key, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    disabled={idx >= rowOrder.length - 1}
+                    aria-label={`Move ${row.label} down`}
+                    onClick={() => moveRow(row.key, 1)}
+                  >
+                    ↓
+                  </button>
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </section>
 

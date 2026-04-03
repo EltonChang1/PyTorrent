@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -45,6 +46,8 @@ class UserSettingsPatch(BaseModel):
     favoriteGenres: list[str] | None = None
     hiddenRowKeys: list[str] | None = None
     showRecommendations: bool | None = None
+    rowOrder: list[str] | None = None
+    myList: list[dict[str, Any]] | None = None
 
 
 class WatchProgressIn(BaseModel):
@@ -211,6 +214,24 @@ def _parse_range_header(range_header: str | None, size: int) -> tuple[int, int] 
 
 
 _STREAM_CHUNK = 256 * 1024
+
+_auth_rl_buckets: dict[str, list[float]] = {}
+_AUTH_RL_WINDOW = 60.0
+_AUTH_RL_MAX = 30
+
+
+def _auth_rate_check(request: Request) -> None:
+    if os.environ.get("PYTORRENT_DISABLE_AUTH_RL", "").lower() in ("1", "true", "yes"):
+        return
+    ip = (request.client.host if request.client else None) or "unknown"
+    now = time.time()
+    cutoff = now - _AUTH_RL_WINDOW
+    bucket = _auth_rl_buckets.setdefault(ip, [])
+    while bucket and bucket[0] < cutoff:
+        bucket.pop(0)
+    if len(bucket) >= _AUTH_RL_MAX:
+        raise HTTPException(429, "Too many attempts; try again shortly.") from None
+    bucket.append(now)
 
 
 def web_dist_dir() -> str | None:
@@ -637,9 +658,10 @@ def create_app() -> FastAPI:
         return await asyncio.to_thread(user_store.session_user_id, tok)
 
     @app.post("/auth/register")
-    async def auth_register(body: RegisterBody) -> JSONResponse:
+    async def auth_register(request: Request, body: RegisterBody) -> JSONResponse:
         from pytorrentd import user_store
 
+        _auth_rate_check(request)
         uid, msg = await asyncio.to_thread(user_store.register_user, body.username, body.password)
         if uid is None:
             raise HTTPException(400, msg) from None
@@ -657,9 +679,10 @@ def create_app() -> FastAPI:
         return resp
 
     @app.post("/auth/login")
-    async def auth_login(body: LoginBody) -> JSONResponse:
+    async def auth_login(request: Request, body: LoginBody) -> JSONResponse:
         from pytorrentd import user_store
 
+        _auth_rate_check(request)
         uid = await asyncio.to_thread(user_store.verify_login, body.username, body.password)
         if uid is None:
             raise HTTPException(401, "invalid username or password") from None
