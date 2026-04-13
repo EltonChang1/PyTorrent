@@ -6,6 +6,9 @@ from pytorrentd.catalog_image_proxy import catalog_image_allowed_url
 
 
 def test_allowed_yts_hosts():
+    assert catalog_image_allowed_url("https://movies-api.accel.li/foo.jpg")
+    assert catalog_image_allowed_url("https://yts.bz/assets/foo.jpg")
+    assert catalog_image_allowed_url("https://img.yts.bz/x.jpg")
     assert catalog_image_allowed_url("https://yts.mx/assets/foo.jpg")
     assert catalog_image_allowed_url("https://img.yts.mx/x.jpg")
     assert catalog_image_allowed_url("https://www3.yts-official.to/poster.jpg")

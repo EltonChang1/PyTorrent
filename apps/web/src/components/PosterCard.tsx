@@ -64,7 +64,9 @@ export function PosterCard({
               <span className="poster-card-ph-text">{title.slice(0, 2).toUpperCase()}</span>
             </div>
           )}
-          <div className="poster-card-shade" />
+          <div className="poster-card-shade" aria-hidden>
+            <span className="material-symbols-outlined poster-card-play">play_arrow</span>
+          </div>
         </div>
         <span className="poster-card-title">{title}</span>
       </button>

@@ -1,7 +1,8 @@
 """
 YTS public JSON API v2 (same contract as https://github.com/rnestler/yts-api-rs).
 
-Base URL from YTS_API_BASE (default https://yts.mx). See https://yts.mx/api
+Base URL from YTS_API_BASE (default https://movies-api.accel.li per https://yts.bz/api).
+Must be origin only — paths use /api/v2/.... Legacy: YTS_API_BASE=https://yts.bz
 """
 
 from __future__ import annotations

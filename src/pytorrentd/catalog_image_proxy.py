@@ -13,6 +13,8 @@ from fastapi.responses import Response
 
 # Hosts we allow to fetch (YTS mirrors and common asset CDNs from their HTML)
 _ALLOWED_SUFFIXES: tuple[str, ...] = (
+    "movies-api.accel.li",
+    "yts.bz",
     "yts.mx",
     "yts-official.to",
     "yts.am",
@@ -48,7 +50,7 @@ def catalog_image_allowed_url(url: str) -> bool:
 
 @lru_cache(maxsize=1)
 def _yts_referer() -> str:
-    return os.environ.get("YTS_BASE_URL", "https://www3.yts-official.to").strip().rstrip("/") + "/"
+    return os.environ.get("YTS_BASE_URL", "https://yts.bz").strip().rstrip("/") + "/"
 
 
 async def fetch_catalog_image(url: str) -> tuple[bytes, str]:

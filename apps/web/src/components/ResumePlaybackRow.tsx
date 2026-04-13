@@ -91,7 +91,7 @@ export function ResumePlaybackRow() {
         Continue watching
       </h2>
       <p className="muted row-sub">Resume in-browser playback where you left off.</p>
-      <div className="row-scroll row-scroll-cw">
+      <div className="row-scroll row-scroll-cw no-scrollbar">
         {cards.map((c) => {
           const p = pct(c.position, c.duration);
           const snap = loadJobCatalogSnapshot(c.jobId);

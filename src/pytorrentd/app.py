@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
+from pathlib import Path
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +25,38 @@ from pytorrent.session import TorrentSession
 from pytorrentd.torrent_api_client import torrent_api_configured, torrent_api_get_json, torrent_api_search_json
 
 log = structlog.get_logger()
+
+
+# #region agent log
+def _agent_debug_ndjson(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
+    """Append one NDJSON line for debug sessions (under workspace or repo .cursor/)."""
+    line = (
+        json.dumps(
+            {
+                "sessionId": "7eef1f",
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            },
+            default=str,
+        )
+        + "\n"
+    )
+    here = Path(__file__).resolve()
+    for base in (here.parents[3], here.parents[2]):
+        try:
+            log_path = base / ".cursor" / "debug-7eef1f.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(line)
+            return
+        except OSError:
+            continue
+
+
+# #endregion
 
 
 class MagnetAddBody(BaseModel):
@@ -80,8 +114,11 @@ class Job:
 
 
 class JobRegistry:
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: str, *, listen_port: int | None = None) -> None:
         self.data_dir = data_dir
+        self.listen_port = listen_port if listen_port is not None else int(
+            os.environ.get("PYTORRENT_BT_PORT", "6881")
+        )
         self.jobs: dict[str, Job] = {}
         self._ws: set[WebSocket] = set()
 
@@ -118,7 +155,7 @@ class JobRegistry:
             meta,
             ddir,
             data_dir=self.data_dir,
-            listen_port=int(os.environ.get("PYTORRENT_BT_PORT", "6881")),
+            listen_port=self.listen_port,
             sequential=sequential,
         )
 
@@ -286,10 +323,9 @@ def create_app() -> FastAPI:
         from pytorrentd import user_store
 
         await user_store.async_init_db()
-        _registry = JobRegistry(data)
 
         bind = os.environ.get("PYTORRENT_BT_BIND", "0.0.0.0")
-        port = int(os.environ.get("PYTORRENT_BT_PORT", "6881"))
+        req_port = int(os.environ.get("PYTORRENT_BT_PORT", "6881"))
 
         async def bt_client(
             reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -305,33 +341,59 @@ def create_app() -> FastAPI:
 
             await run_incoming_peer(reader, writer, resolve)
 
+        _bt_server = None
+        effective_listen = req_port
+        last_err: OSError | None = None
         bound_addrs: list[str] = []
-        try:
-            _bt_server = await asyncio.start_server(bt_client, bind, port)
-            for sock in _bt_server.sockets or ():
-                try:
-                    host, prt = sock.getsockname()[:2]
-                    bound_addrs.append(f"{host}:{prt}")
-                except OSError:
-                    pass
-            log.info("bt_listen", bind=bind, port=port, sockets=bound_addrs)
-            app.state.bt_listen = {
-                "ok": True,
-                "configured_bind": bind,
-                "configured_port": port,
-                "sockets": bound_addrs,
-                "announced_to_trackers_port": port,
-            }
-        except OSError as e:
-            log.error("bt_listen_failed", err=str(e), bind=bind, port=port)
-            _bt_server = None
+        for candidate in range(req_port, req_port + 32):
+            bound_addrs = []
+            try:
+                _registry = JobRegistry(data, listen_port=candidate)
+                _bt_server = await asyncio.start_server(bt_client, bind, candidate)
+                effective_listen = candidate
+                for sock in _bt_server.sockets or ():
+                    try:
+                        host, prt = sock.getsockname()[:2]
+                        bound_addrs.append(f"{host}:{prt}")
+                    except OSError:
+                        pass
+                log.info(
+                    "bt_listen",
+                    bind=bind,
+                    port=candidate,
+                    requested_port=req_port,
+                    sockets=bound_addrs,
+                )
+                app.state.bt_listen = {
+                    "ok": True,
+                    "configured_bind": bind,
+                    "configured_port": candidate,
+                    "requested_port": req_port,
+                    "sockets": bound_addrs,
+                    "announced_to_trackers_port": candidate,
+                }
+                break
+            except OSError as e:
+                last_err = e
+                _registry = None
+                continue
+
+        if _bt_server is None:
+            log.error(
+                "bt_listen_failed",
+                err=str(last_err) if last_err else "unknown",
+                bind=bind,
+                port=req_port,
+            )
             app.state.bt_listen = {
                 "ok": False,
                 "configured_bind": bind,
-                "configured_port": port,
-                "announced_to_trackers_port": port,
-                "error": str(e),
+                "configured_port": req_port,
+                "requested_port": req_port,
+                "announced_to_trackers_port": req_port,
+                "error": str(last_err) if last_err else "bind failed",
             }
+            _registry = JobRegistry(data, listen_port=req_port)
 
         yield
 
@@ -442,16 +504,39 @@ def create_app() -> FastAPI:
         try:
             mag = parse_magnet(body.magnet.strip())
         except ValueError as e:
+            # #region agent log
+            _agent_debug_ndjson("H1", "app.py:add_magnet", "parse_magnet_failed", {"err": str(e)[:300]})
+            # #endregion
             raise HTTPException(400, str(e)) from e
         if not mag.trackers:
+            # #region agent log
+            _agent_debug_ndjson(
+                "H2",
+                "app.py:add_magnet",
+                "no_trackers",
+                {"ih": mag.info_hash.hex()[:16]},
+            )
+            # #endregion
             raise HTTPException(
                 400,
                 "magnet has no tr= trackers; add trackers to the link or use a .torrent file",
             )
-        listen = int(os.environ.get("PYTORRENT_BT_PORT", "6881"))
+        listen = get_registry().listen_port
         peer_id = make_peer_id()
         info_b = await fetch_metadata_via_trackers(mag.trackers, mag.info_hash, peer_id, listen)
         if not info_b:
+            # #region agent log
+            _agent_debug_ndjson(
+                "H3",
+                "app.py:add_magnet",
+                "metadata_timeout",
+                {
+                    "bt_port": listen,
+                    "tracker_count": len(mag.trackers),
+                    "ih": mag.info_hash.hex()[:16],
+                },
+            )
+            # #endregion
             raise HTTPException(
                 504,
                 "could not fetch metadata from peers (no ut_metadata or timeout)",
@@ -459,6 +544,9 @@ def create_app() -> FastAPI:
         try:
             meta = TorrentMeta.from_resolved_magnet(info_b, mag.trackers)
         except BencodeError as e:
+            # #region agent log
+            _agent_debug_ndjson("H4", "app.py:add_magnet", "bencode_failed", {"err": str(e)[:300]})
+            # #endregion
             raise HTTPException(400, f"invalid metadata: {e}") from e
         try:
             job = await get_registry().add_torrent(
@@ -466,7 +554,18 @@ def create_app() -> FastAPI:
             )
         except Exception as e:
             log.warning("magnet add failed", err=str(e))
+            # #region agent log
+            _agent_debug_ndjson("H5", "app.py:add_magnet", "add_torrent_failed", {"err": str(e)[:300]})
+            # #endregion
             raise HTTPException(400, str(e)) from e
+        # #region agent log
+        _agent_debug_ndjson(
+            "H0",
+            "app.py:add_magnet",
+            "ok",
+            {"job_id": job.id, "sequential": body.sequential},
+        )
+        # #endregion
         return JSONResponse(
             {
                 "id": job.id,

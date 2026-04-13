@@ -1,8 +1,8 @@
 {
-  "name": "PyTorrent",
-  "short_name": "PyTorrent",
+  "name": "Torflix",
+  "short_name": "Torflix",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#141414",
-  "theme_color": "#141414"
+  "background_color": "#10141a",
+  "theme_color": "#10141a"
 }

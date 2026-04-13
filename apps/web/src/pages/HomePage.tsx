@@ -225,6 +225,8 @@ export function HomePage() {
         setSelected(null);
         await refreshTorrents();
         if (mode === "stream" && j.id) navigate(`/watch?id=${encodeURIComponent(j.id)}`);
+      } catch (e) {
+        showToast(String(e), "err");
       } finally {
         setAdding(null);
       }
@@ -249,7 +251,7 @@ export function HomePage() {
         <div className="empty-state">
           <h1 className="hero-title">Catalog unavailable</h1>
           <p className="muted">
-            Start <code>pytorrentd</code> with the embedded catalog API, or run{" "}
+            To show the catalog in Torflix, start <code>pytorrentd</code> with the embedded catalog API, or run{" "}
             <a href="https://github.com/Ryuk-me/Torrent-Api-py" target="_blank" rel="noreferrer">
               Torrent-Api-py
             </a>{" "}
@@ -291,7 +293,7 @@ export function HomePage() {
       {catalogFallback ? (
         <p className="catalog-fallback-banner muted">
           YTS catalog unavailable — showing backup sources. Primary list:{" "}
-          <code>YTS_BASE_URL</code> (default <code>https://www3.yts-official.to</code>).
+          <code>YTS_BASE_URL</code> (default <code>https://yts.bz</code>).
         </p>
       ) : null}
 
@@ -327,8 +329,8 @@ export function HomePage() {
       <TitleDetailModal
         item={selected}
         onClose={() => setSelected(null)}
-        onAddFull={(m) => addMagnet(m, "full", selected)}
-        onAddStream={(m) => addMagnet(m, "stream", selected)}
+        onAddFull={(m, catalogItem) => addMagnet(m, "full", catalogItem)}
+        onAddStream={(m, catalogItem) => addMagnet(m, "stream", catalogItem)}
         adding={adding}
       />
     </div>

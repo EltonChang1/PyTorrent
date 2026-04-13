@@ -102,6 +102,8 @@ export function SearchPage() {
         setSelected(null);
         await refreshTorrents();
         if (mode === "stream" && j.id) navigate(`/watch?id=${encodeURIComponent(j.id)}`);
+      } catch (e) {
+        showToast(String(e), "err");
       } finally {
         setAdding(null);
       }
@@ -113,7 +115,7 @@ export function SearchPage() {
     return (
       <div className="page-narrow empty-state">
         <p className="muted">
-          Search requires the catalog API. Run <code>pytorrentd</code> (embedded API) or set{" "}
+          Search in Torflix requires the catalog API. Run <code>pytorrentd</code> (embedded API) or set{" "}
           <code>PYTORRENT_SEARCH_API_BASE</code>.
         </p>
       </div>
@@ -175,8 +177,8 @@ export function SearchPage() {
       <TitleDetailModal
         item={selected}
         onClose={() => setSelected(null)}
-        onAddFull={(m) => addMagnet(m, "full", selected)}
-        onAddStream={(m) => addMagnet(m, "stream", selected)}
+        onAddFull={(m, catalogItem) => addMagnet(m, "full", catalogItem)}
+        onAddStream={(m, catalogItem) => addMagnet(m, "stream", catalogItem)}
         adding={adding}
       />
     </div>

@@ -33,7 +33,7 @@ export function RegisterPage() {
   return (
     <div className="page-narrow page-auth">
       <h1 className="page-title">Create account</h1>
-      <p className="muted">Choose a username and password (stored only on this PyTorrent server).</p>
+      <p className="muted">Choose a username and password (stored only on this Torflix server).</p>
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="auth-label">
           Username

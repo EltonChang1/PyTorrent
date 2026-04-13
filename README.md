@@ -39,7 +39,7 @@ Packaging the daemon is described in [`packaging/README.md`](packaging/README.md
 ## More
 
 - [UX roadmap](docs/UX_ROADMAP.md) · [MCP / agents](contrib/mcp/README.md)
-- References: [BitTorrent spec (Theory.org)](https://wiki.theory.org/BitTorrentSpecification) · [YTS API v2](https://yts.mx/api)
+- References: [BitTorrent spec (Theory.org)](https://wiki.theory.org/BitTorrentSpecification) · [YTS API v2](https://yts.bz/api) — default JSON host [movies-api.accel.li](https://movies-api.accel.li/api/v2/); legacy `yts.bz` via `YTS_API_BASE`
 
 **Limits (short):** in-browser playback depends on format; magnets need `tr=` trackers (no DHT yet); inbound peers need `PYTORRENT_BT_PORT` reachable if you want remote peers.
 

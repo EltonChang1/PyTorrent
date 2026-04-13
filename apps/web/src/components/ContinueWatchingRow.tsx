@@ -17,7 +17,7 @@ export function ContinueWatchingRow({ jobs }: Props) {
       <h2 id="row-continue" className="row-heading">
         Continue downloading
       </h2>
-      <div className="row-scroll row-scroll-cw">
+      <div className="row-scroll row-scroll-cw no-scrollbar">
         {cont.map((j) => {
           const pct = Math.min(100, (100 * j.downloaded) / j.total);
           return (

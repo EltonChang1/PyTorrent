@@ -1,5 +1,5 @@
-/* PyTorrent web app — precache shell; SPA fallback for navigations only (does not cache API). */
-const CACHE = "pyt-web-v1";
+/* Torflix web app — precache shell; SPA fallback for navigations only (does not cache API). */
+const CACHE = "torflix-web-v1";
 const PRECACHE = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

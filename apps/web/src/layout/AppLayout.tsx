@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, Outlet, NavLink, useNavigate } from "react-router-dom";
 import type { AppOutletContext } from "../appOutletContext";
 import { OnboardingModal } from "../components/OnboardingModal";
@@ -45,7 +46,7 @@ export function AppLayout({
       <header className="nf-top">
         <div className="nf-top-inner">
           <NavLink to="/" className="nf-logo" end>
-            PyTorrent
+            Torflix
           </NavLink>
           <nav className="nf-nav" aria-label="Primary">
             {searchConfigured ? (
@@ -102,23 +103,26 @@ export function AppLayout({
 
       <OnboardingModal />
 
-      {toast && (
-        <div className="nf-toast-wrap">
-          <div className={toast.kind === "err" ? "toast toast-err" : "toast toast-ok"} role="status">
-            <div className="toast-body">
-              <span>{toast.msg}</span>
-              {toast.action ? (
-                <Link className="toast-action" to={toast.action.to} onClick={onDismissToast}>
-                  {toast.action.label}
-                </Link>
-              ) : null}
-            </div>
-            <button type="button" className="toast-dismiss" onClick={onDismissToast} aria-label="Dismiss">
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {toast && typeof document !== "undefined"
+        ? createPortal(
+            <div className="nf-toast-wrap">
+              <div className={toast.kind === "err" ? "toast toast-err" : "toast toast-ok"} role="status">
+                <div className="toast-body">
+                  <span>{toast.msg}</span>
+                  {toast.action ? (
+                    <Link className="toast-action" to={toast.action.to} onClick={onDismissToast}>
+                      {toast.action.label}
+                    </Link>
+                  ) : null}
+                </div>
+                <button type="button" className="toast-dismiss" onClick={onDismissToast} aria-label="Dismiss">
+                  ×
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       <main className="nf-main">
         <Outlet context={outletContext} />
@@ -134,7 +138,7 @@ export function AppLayout({
 
       <footer className="nf-footer">
         <p className="nf-legal">
-          Only download and share content you have the right to use. PyTorrent runs locally. Use{" "}
+          Only download and share content you have the right to use. Torflix runs locally on your machine. Use{" "}
           <strong>Full download</strong> for a normal torrent, or <strong>Watch while downloading</strong> for
           sequential download and in-browser playback (MP4/WebM work best). For privacy on peer connections, use a{" "}
           <strong>system-wide VPN</strong>; the app does not start a VPN for you.

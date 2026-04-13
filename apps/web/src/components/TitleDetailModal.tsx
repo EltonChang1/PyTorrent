@@ -7,8 +7,8 @@ import { isInMyList, subscribeMyList, toggleMyList } from "../lib/myList";
 type Props = {
   item: CatalogItem | null;
   onClose: () => void;
-  onAddFull: (magnet: string) => Promise<void>;
-  onAddStream: (magnet: string) => Promise<void>;
+  onAddFull: (magnet: string, item: CatalogItem) => Promise<void>;
+  onAddStream: (magnet: string, item: CatalogItem) => Promise<void>;
   adding: "full" | "stream" | null;
 };
 
@@ -154,9 +154,9 @@ export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding
               </div>
             ) : null}
             <p className="modal-hint">
-              Adds to PyTorrent on this computer. Use <strong>Full download</strong> for the usual rarest-first
-              download, or <strong>Watch while downloading</strong> to fetch pieces in order and play in the browser
-              (best-effort; works best with MP4/WebM). Only use content you are allowed to access.
+              Adds to Torflix on this computer. Use <strong>Full download</strong> for the usual rarest-first download,
+              or <strong>Watch while downloading</strong> to fetch pieces in order and play in the browser (best-effort;
+              works best with MP4/WebM). Only use content you are allowed to access.
             </p>
             <div className="modal-actions modal-actions-split">
               {canAdd ? (
@@ -165,7 +165,7 @@ export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding
                     type="button"
                     className="btn-primary btn-lg"
                     disabled={adding !== null}
-                    onClick={() => onAddFull(effectiveMagnet)}
+                    onClick={() => void onAddFull(effectiveMagnet, item)}
                   >
                     {adding === "full" ? "Adding…" : "Full download"}
                   </button>
@@ -173,7 +173,7 @@ export function TitleDetailModal({ item, onClose, onAddFull, onAddStream, adding
                     type="button"
                     className="btn-secondary btn-lg"
                     disabled={adding !== null}
-                    onClick={() => onAddStream(effectiveMagnet)}
+                    onClick={() => void onAddStream(effectiveMagnet, item)}
                   >
                     {adding === "stream" ? "Adding…" : "Watch while downloading"}
                   </button>

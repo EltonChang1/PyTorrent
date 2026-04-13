@@ -72,14 +72,10 @@ export async function fetchBrowseRow(
   limit = 24,
 ): Promise<{ items: CatalogItem[]; error?: string }> {
   const path = kind === "trending" ? "/browse/trending" : "/browse/recent";
-  let r = await api(
-    `${path}?site=${encodeURIComponent(site)}&limit=${limit}&category=${encodeURIComponent("movies")}`,
-  );
-  let j = (await r.json()) as { data?: CatalogItem[]; error?: string };
-  if (!r.ok || j.error || !Array.isArray(j.data) || j.data.length === 0) {
-    r = await api(`${path}?site=${encodeURIComponent(site)}&limit=${limit}`);
-    j = (await r.json()) as { data?: CatalogItem[]; error?: string };
-  }
+  // Do not send category=movies by default: many sites reject it (YTS: no trending/recent-by-category;
+  // Pirate Bay trending only allows e.g. tv). That caused a first 404 on every row load in devtools.
+  const r = await api(`${path}?site=${encodeURIComponent(site)}&limit=${limit}`);
+  const j = (await r.json()) as { data?: CatalogItem[]; error?: string };
   if (!r.ok) {
     return {
       items: [],

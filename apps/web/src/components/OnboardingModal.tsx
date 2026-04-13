@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const KEY = "pyt_onboarding_done";
+const KEY = "torflix_onboarding_done";
 
 export function OnboardingModal() {
   const [open, setOpen] = useState(() => {
@@ -60,7 +60,7 @@ export function OnboardingModal() {
       <button type="button" className="onb-backdrop" aria-label="Close welcome" onClick={dismiss} />
       <div className="onb-panel" ref={panelRef}>
         <h2 id="onb-title" className="onb-title">
-          Welcome to PyTorrent
+          Welcome to Torflix
         </h2>
         <p className="onb-body muted">
           Browse the catalog, add magnets to your local daemon, and use <strong>Watch while downloading</strong> for

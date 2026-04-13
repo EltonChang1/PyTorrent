@@ -18,8 +18,16 @@ export type PrimaryRowSpec = { key: string; title: string; source: RowSource };
 export const PFY_KEYS = ["yts-pfy-0", "yts-pfy-1", "yts-pfy-2"] as const;
 
 const CORE_SPECS: PrimaryRowSpec[] = [
-  { key: "yts-trend", title: "Trending on YTS", source: { kind: "browse", browse: "trending", site: "yts" } },
-  { key: "yts-recent", title: "Recently added (YTS)", source: { kind: "browse", browse: "recent", site: "yts" } },
+  {
+    key: "yts-trend",
+    title: "Trending on YTS",
+    source: { kind: "ytsJson", params: { sort_by: "seeds", order_by: "desc" } },
+  },
+  {
+    key: "yts-recent",
+    title: "Recently added (YTS)",
+    source: { kind: "ytsJson", params: { sort_by: "date_added", order_by: "desc" } },
+  },
   {
     key: "yts-top10",
     title: "Top 10 on YTS",

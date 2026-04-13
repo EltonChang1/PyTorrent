@@ -32,9 +32,9 @@ The web UI polls `/health` and shows a short listener status line.
 | `PYTORRENT_SEARCH_PATH` | `/api/v1/all/search` | Search path when using an external base |
 | `PYTORRENT_SEARCH_API_KEY` | _(empty)_ | Optional `X-API-Key` for catalog (also sets vendored API key) |
 | `PYTORRENT_API_KEY` | _(empty)_ | Vendored API auth (prefer `PYTORRENT_SEARCH_API_KEY`) |
-| `YTS_BASE_URL` | `https://www3.yts-official.to` | YTS HTML mirror (no trailing slash); Referer for poster proxy |
+| `YTS_BASE_URL` | `https://yts.bz` | YTS HTML mirror (no trailing slash); Referer for poster proxy |
 | `YTS_CATALOG_MODE` | `html` | `html` / `json` / `auto` for YTS listings |
-| `YTS_API_BASE` | `https://yts.mx` | YTS JSON API host when using `json` or `auto` |
+| `YTS_API_BASE` | `https://movies-api.accel.li` | YTS JSON API **origin** only (no `/api` path); daemon calls `{YTS_API_BASE}/api/v2/...`. Per [YTS API](https://yts.bz/api). Legacy: `https://yts.bz` |
 | `YTS_USE_HTML_ONLY` | _(empty)_ | If `1` or `true`, same as `YTS_CATALOG_MODE=html` |
 | `TMDB_API_KEY` | _(empty)_ | Optional poster lookup via The Movie Database |
 | `OMDB_API_KEY` | _(empty)_ | Optional poster lookup via OMDb |

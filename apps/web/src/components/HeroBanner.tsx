@@ -11,13 +11,29 @@ type Props = {
   canAdd: boolean;
 };
 
+function splitTitle(title: string): { line1: string; line2: string } {
+  const parts = title.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    return { line1: title, line2: "" };
+  }
+  const mid = Math.max(1, Math.ceil(parts.length / 2));
+  return {
+    line1: parts.slice(0, mid).join(" "),
+    line2: parts.slice(mid).join(" "),
+  };
+}
+
 export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, canAdd }: Props) {
   if (!item) {
     return (
       <div className="hero hero-empty">
         <div className="hero-inner">
-          <h1 className="hero-title">PyTorrent</h1>
-          <p className="hero-tagline">Browse catalogs and queue downloads locally.</p>
+          <p className="hero-kicker">Browse · torrent · watch</p>
+          <h1 className="hero-title">Torflix</h1>
+          <p className="hero-tagline">
+            Discover titles, queue downloads on this machine, and play in the browser—one self-hosted app, under your
+            control.
+          </p>
         </div>
       </div>
     );
@@ -25,6 +41,7 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
 
   const p = posterSrc(item);
   const title = item.name ?? "Featured";
+  const { line1, line2 } = splitTitle(title);
   const showBackdrop = Boolean(p || item.imdb_code);
 
   return (
@@ -44,8 +61,16 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
         <div className="hero-gradient hero-gradient-solid" />
       )}
       <div className="hero-inner">
-        <p className="hero-kicker">Featured</p>
-        <h1 className="hero-title">{title}</h1>
+        <p className="hero-kicker">Featured title</p>
+        <h1 className="hero-title">
+          {line1}
+          {line2 ? (
+            <>
+              <br />
+              <span className="hero-title-italic">{line2}</span>
+            </>
+          ) : null}
+        </h1>
         <div className="hero-actions">
           {canAdd ? (
             <>
@@ -55,6 +80,13 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
                 disabled={adding !== null}
                 onClick={onAddFull}
               >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  aria-hidden
+                >
+                  download
+                </span>
                 {adding === "full" ? "Adding…" : "Full download"}
               </button>
               <button
@@ -63,11 +95,21 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
                 disabled={adding !== null}
                 onClick={onAddStream}
               >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  aria-hidden
+                >
+                  play_arrow
+                </span>
                 {adding === "stream" ? "Adding…" : "Watch while downloading"}
               </button>
             </>
           ) : null}
           <button type="button" className="btn-hero btn-hero-tertiary" onClick={onMoreInfo}>
+            <span className="material-symbols-outlined" aria-hidden>
+              info
+            </span>
             More info
           </button>
         </div>

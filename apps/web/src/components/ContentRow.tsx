@@ -68,7 +68,7 @@ export function ContentRow({
       <h2 id={headingId} className="row-heading">
         {title}
       </h2>
-      <div className="row-scroll">
+      <div className="row-scroll no-scrollbar">
         {loading && items.length === 0
           ? Array.from({ length: 8 }, (_, i) => (
               <div key={i} className="poster-card-wrap" aria-hidden>
