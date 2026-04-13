@@ -1,4 +1,4 @@
-/** YTS (and similar) per-quality options from the catalog API */
+/** Per-quality torrent options from the catalog API */
 export type CatalogTorrentOption = {
   quality?: string;
   type?: string;

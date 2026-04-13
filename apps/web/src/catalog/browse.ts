@@ -19,7 +19,7 @@ export type YtsCuratedParams = {
   limit?: number;
 };
 
-/** YTS JSON API slice (genre / sort); uses daemon `/browse/yts/list`. */
+/** Curated movie list slice (genre / sort); hits the daemon browse list endpoint. */
 export async function fetchYtsCuratedList(
   api: ApiFn,
   params: YtsCuratedParams,
@@ -72,7 +72,7 @@ export async function fetchBrowseRow(
   limit = 24,
 ): Promise<{ items: CatalogItem[]; error?: string }> {
   const path = kind === "trending" ? "/browse/trending" : "/browse/recent";
-  // Do not send category=movies by default: many sites reject it (YTS: no trending/recent-by-category;
+  // Do not send category=movies by default: many sites reject it (primary catalog: no trending/recent-by-category;
   // Pirate Bay trending only allows e.g. tv). That caused a first 404 on every row load in devtools.
   const r = await api(`${path}?site=${encodeURIComponent(site)}&limit=${limit}`);
   const j = (await r.json()) as { data?: CatalogItem[]; error?: string };

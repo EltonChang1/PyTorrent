@@ -6,9 +6,20 @@ import { TitleDetailModal } from "../components/TitleDetailModal";
 import { saveJobCatalogSnapshot } from "../lib/jobMeta";
 import { setLastCatalogTitle } from "../lib/lastCatalogTitle";
 
+/** URL uses neutral id; daemon search API still expects `site=yts` for this source. */
+function siteParamForApi(site: string): string {
+  if (!site) return "";
+  return site === "movies" ? "yts" : site;
+}
+
+/** Legacy bookmarks used `site=yts`; normalize for UI state. */
+function siteParamFromUrl(site: string): string {
+  return site === "yts" ? "movies" : site;
+}
+
 const SITE_PRESETS = [
   { id: "", label: "All sites (aggregated)" },
-  { id: "yts", label: "YTS" },
+  { id: "movies", label: "Movies" },
   { id: "1337x", label: "1337x" },
   { id: "tgx", label: "TorrentGalaxy" },
   { id: "piratebay", label: "The Pirate Bay" },
@@ -32,8 +43,20 @@ export function SearchPage() {
   const [adding, setAdding] = useState<"full" | "stream" | null>(null);
 
   useEffect(() => {
+    if (siteParam !== "yts") return;
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("site", "movies");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [siteParam, setParams]);
+
+  useEffect(() => {
     setLocalQ(qParam);
-    setSite(siteParam);
+    setSite(siteParamFromUrl(siteParam));
   }, [qParam, siteParam]);
 
   useEffect(() => {
@@ -49,7 +72,8 @@ export function SearchPage() {
       setLoading(true);
       setBanner(null);
       try {
-        const siteQ = siteParam ? `&site=${encodeURIComponent(siteParam)}` : "";
+        const apiSite = siteParamForApi(siteParamFromUrl(siteParam));
+        const siteQ = apiSite ? `&site=${encodeURIComponent(apiSite)}` : "";
         const r = await api(`/search?q=${encodeURIComponent(qParam)}&limit=60${siteQ}`);
         const j = (await r.json()) as { data?: CatalogItem[]; error?: string };
         if (cancelled) return;

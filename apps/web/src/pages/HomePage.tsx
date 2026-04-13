@@ -122,9 +122,9 @@ export function HomePage() {
       if (cancelled) return;
 
       const trend = results.find((x) => x.spec.key === "yts-trend");
-      const ytsFailed = !trend?.items?.length;
+      const primaryCatalogFailed = !trend?.items?.length;
 
-      if (ytsFailed) {
+      if (primaryCatalogFailed) {
         setCatalogFallback(true);
         const backupResults = await Promise.all(
           BACKUP_HOME_ROWS.map((spec) => fetchBrowseRow(api, spec.kind, spec.site)),
@@ -292,8 +292,8 @@ export function HomePage() {
 
       {catalogFallback ? (
         <p className="catalog-fallback-banner muted">
-          YTS catalog unavailable — showing backup sources. Primary list:{" "}
-          <code>YTS_BASE_URL</code> (default <code>https://yts.bz</code>).
+          Primary movie catalog unavailable — showing backup index sources. Check the daemon catalog API URL env (see
+          server docs) and try again.
         </p>
       ) : null}
 

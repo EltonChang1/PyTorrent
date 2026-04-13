@@ -20,26 +20,26 @@ export const PFY_KEYS = ["yts-pfy-0", "yts-pfy-1", "yts-pfy-2"] as const;
 const CORE_SPECS: PrimaryRowSpec[] = [
   {
     key: "yts-trend",
-    title: "Trending on YTS",
+    title: "Trending now",
     source: { kind: "ytsJson", params: { sort_by: "seeds", order_by: "desc" } },
   },
   {
     key: "yts-recent",
-    title: "Recently added (YTS)",
+    title: "Recently added",
     source: { kind: "ytsJson", params: { sort_by: "date_added", order_by: "desc" } },
   },
   {
     key: "yts-top10",
-    title: "Top 10 on YTS",
+    title: "Top 10",
     source: {
       kind: "ytsJson",
       params: { sort_by: "download_count", order_by: "desc", limit: 10 },
     },
   },
-  { key: "yts-horror", title: "Horror on YTS", source: { kind: "ytsJson", params: { genre: "Horror" } } },
-  { key: "yts-comedy", title: "Comedy on YTS", source: { kind: "ytsJson", params: { genre: "Comedy" } } },
-  { key: "yts-scifi", title: "Sci-Fi on YTS", source: { kind: "ytsJson", params: { genre: "Sci-Fi" } } },
-  { key: "yts-action", title: "Action on YTS", source: { kind: "ytsJson", params: { genre: "Action" } } },
+  { key: "yts-horror", title: "Horror", source: { kind: "ytsJson", params: { genre: "Horror" } } },
+  { key: "yts-comedy", title: "Comedy", source: { kind: "ytsJson", params: { genre: "Comedy" } } },
+  { key: "yts-scifi", title: "Sci-Fi", source: { kind: "ytsJson", params: { genre: "Sci-Fi" } } },
+  { key: "yts-action", title: "Action", source: { kind: "ytsJson", params: { genre: "Action" } } },
   {
     key: "yts-classics",
     title: "Highly rated classics",
