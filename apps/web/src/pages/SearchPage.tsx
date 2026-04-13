@@ -139,8 +139,8 @@ export function SearchPage() {
     return (
       <div className="page-narrow empty-state">
         <p className="muted">
-          Search in Torflix requires the catalog API. Run <code>pytorrentd</code> (embedded API) or set{" "}
-          <code>PYTORRENT_SEARCH_API_BASE</code>.
+          Search in Torflix requires the catalog API. Run <code>torflixd</code> (embedded API) or set{" "}
+          <code>TORFLIX_SEARCH_API_BASE</code>.
         </p>
       </div>
     );

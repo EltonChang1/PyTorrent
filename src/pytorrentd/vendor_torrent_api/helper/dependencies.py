@@ -4,7 +4,7 @@ from fastapi import Security, HTTPException, status
 from fastapi.security import APIKeyHeader
 
 
-api_key = os.environ.get("PYTORRENT_API_KEY")
+api_key = os.environ.get("TORFLIX_API_KEY") or os.environ.get("PYTORRENT_API_KEY")
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def authenticate_request(

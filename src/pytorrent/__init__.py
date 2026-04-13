@@ -1,4 +1,4 @@
-"""PyTorrent BitTorrent engine library (no web framework)."""
+"""Torflix BitTorrent engine library (no web framework)."""
 
 from pytorrent.torrent import TorrentMeta
 

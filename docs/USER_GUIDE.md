@@ -1,12 +1,12 @@
-# PyTorrent — User guide
+# Torflix — User guide
 
-This guide is for anyone using the **website** after someone has already installed and started PyTorrent on the computer (or you are opening the app on the same machine where it runs). No command line is required for daily use.
+This guide is for anyone using the **website** after someone has already installed and started Torflix on the computer (or you are opening the app on the same machine where it runs). No command line is required for daily use.
 
 ---
 
 ## 1. First time you open the site
 
-When you first visit, you may see a short **welcome** message. It explains that PyTorrent runs on your computer, that you should only use content you are allowed to access, and where to change settings later.
+When you first visit, you may see a short **welcome** message. It explains that Torflix runs on your computer, that you should only use content you are allowed to access, and where to change settings later.
 
 ![Welcome message](img/welcome_message.png)
 
@@ -18,7 +18,7 @@ Click **Got it** to close the message. You can use the app normally after that.
 
 At the top you will see:
 
-- **PyTorrent** (logo) — click to go back to the **Home** screen with movie rows.
+- **Torflix** (logo) — click to go back to the **Home** screen with movie rows.
 - **Home** — browse suggested rows (trending, genres, and similar).
 - **Search** — look up titles by keyword (if catalog search is turned on).
 - **My downloads** — list of torrents you added and their progress.
@@ -89,13 +89,13 @@ Open **Dashboard** to:
 - **Show or hide** specific home rows and **change their order** with the up/down arrows.
 - **Save** — stores settings on this device for guests, or on the server if you **register** and **sign in**.
 
-Signing in is optional; it mainly syncs preferences and **continue watching** across sessions on that PyTorrent server.
+Signing in is optional; it mainly syncs preferences and **continue watching** across sessions on that Torflix server.
 
 ---
 
 ## 9. If something does not work
 
-- **“Catalog unavailable”** — the person who runs PyTorrent may need to start the program with catalog search enabled or fix network settings. You can still use **My downloads** for things already added.
+- **“Catalog unavailable”** — the person who runs Torflix may need to start the program with catalog search enabled or fix network settings. You can still use **My downloads** for things already added.
 - **Video does not play** — the file type might not be supported in the browser; try **Full download** and open the file in a video app on the computer.
 - **Very slow or no peers** — torrents depend on other people sharing; firewalls or VPNs can also affect connections. The owner of the machine can check the **Connection & BitTorrent** section at the bottom of the page for status.
 

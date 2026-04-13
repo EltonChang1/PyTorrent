@@ -32,7 +32,7 @@ def _ltep_handshake_out() -> bytes:
     md: OrderedDict[bytes, int] = OrderedDict()
     md[b"ut_metadata"] = 3
     d[b"m"] = md
-    d[b"v"] = b"PyTorrent 0.1"
+    d[b"v"] = b"Torflix 0.1"
     pl = Encoder(d).encode()
     return _build_msg(MSG_EXTENDED, bytes([EXT_HANDSHAKE]) + pl)
 

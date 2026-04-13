@@ -12,7 +12,7 @@ Status: checklist below reflects the implemented pass (see repo history for deta
 
 - [x] Staggered row entrance animation + improved skeletons
 - [x] Row empty states with Retry
-- [x] Top 10 on YTS row (limit 10, ranked badges)
+- [x] Top 10 row (limit 10, ranked badges)
 - [x] “More like your last watch” row (search from last resume title)
 - [x] Three “Picked for you — {genre}” rows from favorite genres (replace single row)
 - [x] My List: heart on cards + modal + home row; sync to `user_settings` when logged in

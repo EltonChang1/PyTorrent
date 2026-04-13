@@ -35,7 +35,7 @@ export function LoginPage() {
       <h1 className="page-title">Sign in</h1>
       <p className="muted">
         Optional account: sync watch progress and dashboard across browsers on this Torflix server. Torrents stay on the
-        machine running <code>pytorrentd</code>.
+        machine running <code>torflixd</code>.
       </p>
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="auth-label">

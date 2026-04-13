@@ -5,21 +5,26 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 import secrets
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any
 
+from pytorrent.paths import resolve_data_dir
+
 PBKDF2_ITER = 200_000
 SESSION_DAYS = 30
 
 
 def db_path() -> Path:
-    base = Path(os.environ.get("PYTORRENT_DATA_DIR", os.path.expanduser("~/.pytorrent")))
+    base = Path(resolve_data_dir())
     base.mkdir(parents=True, exist_ok=True)
-    return base / "pytorrent_users.db"
+    new_p = base / "torflix_users.db"
+    old_p = base / "pytorrent_users.db"
+    if new_p.exists() or not old_p.exists():
+        return new_p
+    return old_p
 
 
 def _connect() -> sqlite3.Connection:

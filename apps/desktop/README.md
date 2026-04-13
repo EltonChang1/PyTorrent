@@ -1,4 +1,4 @@
-# PyTorrent desktop shell
+# Torflix desktop shell
 
 This folder is a placeholder for a **Tauri** (or Electron) wrapper.
 
@@ -14,7 +14,7 @@ Choose the existing `../web` as the frontend (Vite + React) and set **dev URL** 
 
 ## Run with local daemon
 
-1. Start the Python daemon: `pytorrentd` (from repo root after `pip install -e .`).
+1. Start the Python daemon: **`torflixd`** (from repo root after `pip install -e .`; **`pytorrentd`** is an alias).
 2. `cd apps/web && npm run dev` for UI, or load the built `dist/` inside Tauri.
 
-Bundling `pytorrentd` with PyInstaller is described in [`../../packaging/README.md`](../../packaging/README.md). The desktop shell can spawn that binary on startup.
+Bundling **`torflixd`** with PyInstaller is described in [`../../packaging/README.md`](../../packaging/README.md). The desktop shell can spawn that binary on startup.

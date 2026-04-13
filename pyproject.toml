@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pytorrent-suite"
+name = "torflix-suite"
 version = "0.1.0"
-description = "PyTorrent: BitTorrent engine + local daemon + web UI"
+description = "Torflix: BitTorrent engine + local daemon + web UI"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "PyTorrent contributors" }]
+authors = [{ name = "Torflix contributors" }]
 dependencies = [
   "aiohttp>=3.9.0",
   "beautifulsoup4>=4.12.0",
@@ -33,6 +33,7 @@ dev = [
 ]
 
 [project.scripts]
+torflixd = "pytorrentd.__main__:main"
 pytorrentd = "pytorrentd.__main__:main"
 
 [tool.setuptools.packages.find]

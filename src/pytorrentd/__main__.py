@@ -1,13 +1,12 @@
-"""CLI entry: `python -m pytorrentd` or `pytorrentd`."""
+"""CLI entry: `torflixd`, `pytorrentd`, or `python -m pytorrentd`."""
 
 from __future__ import annotations
-
-import os
 
 import structlog
 import uvicorn
 
 from pytorrentd.app import create_app
+from pytorrentd.torflix_env import tenv
 
 log = structlog.get_logger()
 
@@ -20,8 +19,8 @@ def main() -> None:
             structlog.dev.ConsoleRenderer(),
         ]
     )
-    host = os.environ.get("PYTORRENT_HOST", "127.0.0.1")
-    port = int(os.environ.get("PYTORRENT_PORT", "8765"))
+    host = tenv("HOST") or "127.0.0.1"
+    port = int(tenv("PORT") or "8765")
     log.info("starting", host=host, port=port)
     app = create_app()
     uvicorn.run(app, host=host, port=port, log_level="info")

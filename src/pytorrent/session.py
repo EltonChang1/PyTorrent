@@ -11,6 +11,7 @@ from typing import Any, Callable, Coroutine
 
 import aiohttp
 
+from pytorrent.paths import resolve_data_dir
 from pytorrent.piece_picker import PiecePicker
 from pytorrent.piece_state import PieceState
 from pytorrent.protocol.peer import BLOCK_SIZE, run_peer_download
@@ -86,7 +87,7 @@ class TorrentSession:
         self.meta = meta
         self.download_dir = download_dir
         self.listen_port = listen_port
-        self.data_dir = data_dir or os.path.expanduser("~/.pytorrent")
+        self.data_dir = data_dir or resolve_data_dir()
         self.peer_id = make_peer_id()
         self.storage = DiskStorage(meta, download_dir)
         self.piece_state = PieceState(

@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import HTTPException
-from fastapi.responses import Response
 
 # Hosts we allow to fetch (YTS mirrors and common asset CDNs from their HTML)
 _ALLOWED_SUFFIXES: tuple[str, ...] = (
@@ -63,7 +62,7 @@ async def fetch_catalog_image(url: str) -> tuple[bytes, str]:
         return hit[1], hit[2]
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; PyTorrent/1.0; +catalog-image)",
+        "User-Agent": "Mozilla/5.0 (compatible; Torflix/1.0; +catalog-image)",
         "Referer": _yts_referer(),
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     }

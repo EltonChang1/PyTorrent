@@ -51,7 +51,7 @@ function AppRoutes() {
       if (!r.ok) throw new Error(String(r.status));
       setTorrentRows(await r.json());
     } catch {
-      pushLog("Failed to fetch /torrents — is pytorrentd running?");
+      pushLog("Failed to fetch /torrents — is torflixd running?");
     }
   }, [pushLog]);
 
@@ -108,80 +108,12 @@ function AppRoutes() {
   useEffect(() => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    const url = `${proto}//${host}/ws`;
-    // #region agent log
-    fetch("http://127.0.0.1:7596/ingest/3bcccf3c-7959-4cec-bdac-711293f5fe46", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2cbcb8" },
-      body: JSON.stringify({
-        sessionId: "2cbcb8",
-        location: "App.tsx:ws",
-        message: "WebSocket new",
-        data: { url, dev: import.meta.env.DEV },
-        timestamp: Date.now(),
-        hypothesisId: "H1_H2_H3",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(`${proto}//${host}/ws`);
     ws.onopen = () => {
-      // #region agent log
-      fetch("http://127.0.0.1:7596/ingest/3bcccf3c-7959-4cec-bdac-711293f5fe46", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2cbcb8" },
-        body: JSON.stringify({
-          sessionId: "2cbcb8",
-          location: "App.tsx:ws",
-          message: "WebSocket open",
-          data: { url },
-          timestamp: Date.now(),
-          hypothesisId: "H2_H3",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
       setConnected(true);
       logRef.current("WebSocket connected");
     };
-    ws.onerror = () => {
-      // #region agent log
-      fetch("http://127.0.0.1:7596/ingest/3bcccf3c-7959-4cec-bdac-711293f5fe46", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2cbcb8" },
-        body: JSON.stringify({
-          sessionId: "2cbcb8",
-          location: "App.tsx:ws",
-          message: "WebSocket error event",
-          data: { url, readyState: ws.readyState },
-          timestamp: Date.now(),
-          hypothesisId: "H2_H3",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
-    };
-    ws.onclose = (ev) => {
-      // #region agent log
-      fetch("http://127.0.0.1:7596/ingest/3bcccf3c-7959-4cec-bdac-711293f5fe46", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2cbcb8" },
-        body: JSON.stringify({
-          sessionId: "2cbcb8",
-          location: "App.tsx:ws",
-          message: "WebSocket close",
-          data: {
-            code: ev.code,
-            reason: ev.reason,
-            wasClean: ev.wasClean,
-            readyState: ws.readyState,
-          },
-          timestamp: Date.now(),
-          hypothesisId: "H1_H2_H3_H5",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
+    ws.onclose = () => {
       setConnected(false);
       logRef.current("WebSocket disconnected");
     };
@@ -194,24 +126,7 @@ function AppRoutes() {
         logRef.current(String(ev.data));
       }
     };
-    return () => {
-      // #region agent log
-      fetch("http://127.0.0.1:7596/ingest/3bcccf3c-7959-4cec-bdac-711293f5fe46", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2cbcb8" },
-        body: JSON.stringify({
-          sessionId: "2cbcb8",
-          location: "App.tsx:ws",
-          message: "WebSocket effect cleanup",
-          data: { url, readyState: ws.readyState },
-          timestamp: Date.now(),
-          hypothesisId: "H1_H5",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
-      ws.close();
-    };
+    return () => ws.close();
   }, []);
 
   const outletContext = useMemo<AppOutletContext>(

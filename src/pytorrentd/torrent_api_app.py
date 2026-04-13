@@ -1,8 +1,8 @@
 """
 Embedded Torrent-Api-py FastAPI application (vendored under vendor_torrent_api/).
 
-Loaded only when needed. Auth: Torrent-Api uses env PYTORRENT_API_KEY; PyTorrent maps
-PYTORRENT_SEARCH_API_KEY to the same if PYTORRENT_API_KEY is unset.
+Loaded only when needed. Auth: Torrent-Api uses env PYTORRENT_API_KEY (or TORFLIX_API_KEY);
+Torflix maps SEARCH_API_KEY to the same if API_KEY is unset.
 """
 
 from __future__ import annotations
@@ -36,16 +36,25 @@ _embedded_app: FastAPI | None = None
 
 
 def _sync_api_key_env() -> None:
-    sk = os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
-    if sk and not os.environ.get("PYTORRENT_API_KEY", "").strip():
-        os.environ["PYTORRENT_API_KEY"] = sk
+    sk = (
+        os.environ.get("TORFLIX_SEARCH_API_KEY", "").strip()
+        or os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
+    )
+    if not sk:
+        return
+    if not (
+        os.environ.get("TORFLIX_API_KEY", "").strip()
+        or os.environ.get("PYTORRENT_API_KEY", "").strip()
+    ):
+        os.environ.setdefault("TORFLIX_API_KEY", sk)
+        os.environ.setdefault("PYTORRENT_API_KEY", sk)
 
 
 def create_embedded_torrent_api_app() -> FastAPI:
     """Build the same API surface as upstream main.py (without home README route, mangum, or uvicorn)."""
     _ensure_vendor_on_path()
     if not vendor_torrent_api_installed():
-        raise RuntimeError("vendor_torrent_api is missing from the pytorrentd package")
+        raise RuntimeError("vendor_torrent_api is missing from the Torflix daemon package")
 
     _sync_api_key_env()
 
@@ -62,7 +71,7 @@ def create_embedded_torrent_api_app() -> FastAPI:
     start_time = time.time()
 
     app = FastAPI(
-        title="Torrent-Api-Py (embedded in PyTorrent)",
+        title="Torrent-Api-Py (embedded in Torflix)",
         version="1.0.1",
         description="Vendored from https://github.com/Ryuk-me/Torrent-Api-py",
         docs_url="/docs",

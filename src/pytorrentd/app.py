@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import time
-from pathlib import Path
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -20,43 +18,13 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from pytorrent.bencoding import BencodeError
-from pytorrent.torrent import TorrentMeta, playback_content_type, primary_playback_span
+from pytorrent.paths import resolve_data_dir
 from pytorrent.session import TorrentSession
+from pytorrent.torrent import TorrentMeta, playback_content_type, primary_playback_span
+from pytorrentd.torflix_env import tenv, tenv_strip
 from pytorrentd.torrent_api_client import torrent_api_configured, torrent_api_get_json, torrent_api_search_json
 
 log = structlog.get_logger()
-
-
-# #region agent log
-def _agent_debug_ndjson(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
-    """Append one NDJSON line for debug sessions (under workspace or repo .cursor/)."""
-    line = (
-        json.dumps(
-            {
-                "sessionId": "7eef1f",
-                "hypothesisId": hypothesis_id,
-                "location": location,
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            },
-            default=str,
-        )
-        + "\n"
-    )
-    here = Path(__file__).resolve()
-    for base in (here.parents[3], here.parents[2]):
-        try:
-            log_path = base / ".cursor" / "debug-7eef1f.log"
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(line)
-            return
-        except OSError:
-            continue
-
-
-# #endregion
 
 
 class MagnetAddBody(BaseModel):
@@ -116,9 +84,7 @@ class Job:
 class JobRegistry:
     def __init__(self, data_dir: str, *, listen_port: int | None = None) -> None:
         self.data_dir = data_dir
-        self.listen_port = listen_port if listen_port is not None else int(
-            os.environ.get("PYTORRENT_BT_PORT", "6881")
-        )
+        self.listen_port = listen_port if listen_port is not None else int(tenv("BT_PORT") or "6881")
         self.jobs: dict[str, Job] = {}
         self._ws: set[WebSocket] = set()
 
@@ -258,7 +224,7 @@ _AUTH_RL_MAX = 30
 
 
 def _auth_rate_check(request: Request) -> None:
-    if os.environ.get("PYTORRENT_DISABLE_AUTH_RL", "").lower() in ("1", "true", "yes"):
+    if (tenv_strip("DISABLE_AUTH_RL") or "").lower() in ("1", "true", "yes"):
         return
     ip = (request.client.host if request.client else None) or "unknown"
     now = time.time()
@@ -273,7 +239,7 @@ def _auth_rate_check(request: Request) -> None:
 
 def web_dist_dir() -> str | None:
     """Directory with Vite `npm run build` output (contains index.html)."""
-    env = os.environ.get("PYTORRENT_WEB_DIST", "").strip()
+    env = tenv_strip("WEB_DIST")
     if env and os.path.isdir(env) and os.path.isfile(os.path.join(env, "index.html")):
         return env
     cand = os.path.abspath(os.path.join(os.getcwd(), "apps", "web", "dist"))
@@ -288,7 +254,7 @@ def _fallback_root_html() -> str:
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>PyTorrent daemon</title>
+  <title>Torflix daemon</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem;
            line-height: 1.5; color: #222; }
@@ -297,13 +263,13 @@ def _fallback_root_html() -> str:
   </style>
 </head>
 <body>
-  <h1>PyTorrent daemon</h1>
-  <p>This URL is the <strong>API</strong> (<code>pytorrentd</code>), not the web UI assets.</p>
+  <h1>Torflix daemon</h1>
+  <p>This URL is the <strong>API</strong> (<code>torflixd</code>), not the web UI assets.</p>
   <ul>
     <li><strong>Development UI:</strong> run <code>cd apps/web && npm run dev</code> and open
       <a href="http://localhost:5173">http://localhost:5173</a> (proxies to this daemon).</li>
     <li><strong>UI on this port:</strong> run <code>cd apps/web && npm run build</code>, then restart
-      <code>pytorrentd</code> from the repo root (or set <code>PYTORRENT_WEB_DIST</code> to your
+      <code>torflixd</code> from the repo root (or set <code>TORFLIX_WEB_DIST</code> to your
       <code>dist</code> folder). Reload this page.</li>
   </ul>
   <p>API checks: <a href="/health"><code>GET /health</code></a>,
@@ -318,14 +284,14 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         global _registry, _bt_server
-        data = os.environ.get("PYTORRENT_DATA_DIR", os.path.expanduser("~/.pytorrent"))
+        data = resolve_data_dir()
         os.makedirs(data, exist_ok=True)
         from pytorrentd import user_store
 
         await user_store.async_init_db()
 
-        bind = os.environ.get("PYTORRENT_BT_BIND", "0.0.0.0")
-        req_port = int(os.environ.get("PYTORRENT_BT_PORT", "6881"))
+        bind = tenv("BT_BIND") or "0.0.0.0"
+        req_port = int(tenv("BT_PORT") or "6881")
 
         async def bt_client(
             reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -342,7 +308,6 @@ def create_app() -> FastAPI:
             await run_incoming_peer(reader, writer, resolve)
 
         _bt_server = None
-        effective_listen = req_port
         last_err: OSError | None = None
         bound_addrs: list[str] = []
         for candidate in range(req_port, req_port + 32):
@@ -350,7 +315,6 @@ def create_app() -> FastAPI:
             try:
                 _registry = JobRegistry(data, listen_port=candidate)
                 _bt_server = await asyncio.start_server(bt_client, bind, candidate)
-                effective_listen = candidate
                 for sock in _bt_server.sockets or ():
                     try:
                         host, prt = sock.getsockname()[:2]
@@ -425,10 +389,10 @@ def create_app() -> FastAPI:
                     j.task.cancel()
         _registry = None
 
-    app = FastAPI(title="PyTorrent daemon", lifespan=lifespan)
+    app = FastAPI(title="Torflix daemon", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=os.environ.get("PYTORRENT_CORS", "http://localhost:5173").split(","),
+        allow_origins=(tenv("CORS") or "http://localhost:5173").split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -445,8 +409,8 @@ def create_app() -> FastAPI:
         out["search"] = {
             "configured": torrent_api_configured(),
             "embedded": torrent_api_configured()
-            and not bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
-            "external_base": bool(os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip()),
+            and not bool(tenv_strip("SEARCH_API_BASE")),
+            "external_base": bool(tenv_strip("SEARCH_API_BASE")),
         }
         out["accounts"] = {"enabled": True}
         return out
@@ -504,19 +468,8 @@ def create_app() -> FastAPI:
         try:
             mag = parse_magnet(body.magnet.strip())
         except ValueError as e:
-            # #region agent log
-            _agent_debug_ndjson("H1", "app.py:add_magnet", "parse_magnet_failed", {"err": str(e)[:300]})
-            # #endregion
             raise HTTPException(400, str(e)) from e
         if not mag.trackers:
-            # #region agent log
-            _agent_debug_ndjson(
-                "H2",
-                "app.py:add_magnet",
-                "no_trackers",
-                {"ih": mag.info_hash.hex()[:16]},
-            )
-            # #endregion
             raise HTTPException(
                 400,
                 "magnet has no tr= trackers; add trackers to the link or use a .torrent file",
@@ -525,18 +478,6 @@ def create_app() -> FastAPI:
         peer_id = make_peer_id()
         info_b = await fetch_metadata_via_trackers(mag.trackers, mag.info_hash, peer_id, listen)
         if not info_b:
-            # #region agent log
-            _agent_debug_ndjson(
-                "H3",
-                "app.py:add_magnet",
-                "metadata_timeout",
-                {
-                    "bt_port": listen,
-                    "tracker_count": len(mag.trackers),
-                    "ih": mag.info_hash.hex()[:16],
-                },
-            )
-            # #endregion
             raise HTTPException(
                 504,
                 "could not fetch metadata from peers (no ut_metadata or timeout)",
@@ -544,9 +485,6 @@ def create_app() -> FastAPI:
         try:
             meta = TorrentMeta.from_resolved_magnet(info_b, mag.trackers)
         except BencodeError as e:
-            # #region agent log
-            _agent_debug_ndjson("H4", "app.py:add_magnet", "bencode_failed", {"err": str(e)[:300]})
-            # #endregion
             raise HTTPException(400, f"invalid metadata: {e}") from e
         try:
             job = await get_registry().add_torrent(
@@ -554,18 +492,7 @@ def create_app() -> FastAPI:
             )
         except Exception as e:
             log.warning("magnet add failed", err=str(e))
-            # #region agent log
-            _agent_debug_ndjson("H5", "app.py:add_magnet", "add_torrent_failed", {"err": str(e)[:300]})
-            # #endregion
             raise HTTPException(400, str(e)) from e
-        # #region agent log
-        _agent_debug_ndjson(
-            "H0",
-            "app.py:add_magnet",
-            "ok",
-            {"job_id": job.id, "sequential": body.sequential},
-        )
-        # #endregion
         return JSONResponse(
             {
                 "id": job.id,

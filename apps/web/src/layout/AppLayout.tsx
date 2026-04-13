@@ -131,7 +131,7 @@ export function AppLayout({
       <details className="nf-status">
         <summary>Connection & BitTorrent</summary>
         <p className="muted small">
-          Daemon <code>pytorrentd</code> · WebSocket {connected ? "connected" : "disconnected"}
+          Daemon <code>torflixd</code> · WebSocket {connected ? "connected" : "disconnected"}
         </p>
         <p className="muted small">{btLine}</p>
       </details>

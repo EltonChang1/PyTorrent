@@ -1,4 +1,4 @@
-# PyInstaller spec — run: pyinstaller packaging/pytorrentd.spec
+# PyInstaller spec — run: pyinstaller packaging/torflixd.spec
 
 block_cipher = None
 
@@ -25,7 +25,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="pytorrentd",
+    name="torflixd",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

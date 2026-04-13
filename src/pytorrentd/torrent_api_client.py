@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import aiohttp
@@ -13,6 +12,7 @@ import urllib.parse
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
+from pytorrentd.torflix_env import tenv_strip
 from pytorrentd.torrent_api_app import get_embedded_torrent_api_app, vendor_torrent_api_installed
 
 log = structlog.get_logger()
@@ -20,7 +20,7 @@ log = structlog.get_logger()
 
 def torrent_api_configured() -> bool:
     """True if external base is set or vendored API is present."""
-    if os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip():
+    if tenv_strip("SEARCH_API_BASE"):
         return True
     return vendor_torrent_api_installed()
 
@@ -34,10 +34,10 @@ async def torrent_api_get_json(
     if not path.startswith("/"):
         path = "/" + path
     filtered = {k: v for k, v in params.items() if v is not None}
-    ext = os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip().rstrip("/")
+    ext = tenv_strip("SEARCH_API_BASE").rstrip("/")
 
     headers: dict[str, str] = {}
-    key = os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
+    key = tenv_strip("SEARCH_API_KEY")
     if key:
         headers["X-API-Key"] = key
 
@@ -94,9 +94,9 @@ async def torrent_api_search_json(
     limit: int,
     timeout: float = 60.0,
 ) -> JSONResponse:
-    ext = os.environ.get("PYTORRENT_SEARCH_API_BASE", "").strip().rstrip("/")
+    ext = tenv_strip("SEARCH_API_BASE").rstrip("/")
     headers: dict[str, str] = {}
-    key = os.environ.get("PYTORRENT_SEARCH_API_KEY", "").strip()
+    key = tenv_strip("SEARCH_API_KEY")
     if key:
         headers["X-API-Key"] = key
 
@@ -108,7 +108,7 @@ async def torrent_api_search_json(
                 f"&query={urllib.parse.quote(q)}&limit={limit}"
             )
         else:
-            path = os.environ.get("PYTORRENT_SEARCH_PATH", "/api/v1/all/search").strip()
+            path = tenv_strip("SEARCH_PATH", "/api/v1/all/search")
             if not path.startswith("/"):
                 path = "/" + path
             url = f"{ext}{path}?query={urllib.parse.quote(q)}&limit={limit}"
@@ -130,7 +130,7 @@ async def torrent_api_search_json(
                 503,
                 "Torrent catalog API unavailable: vendored Torrent-Api-py is missing.",
             )
-        path = "/api/v1/search" if site else os.environ.get("PYTORRENT_SEARCH_PATH", "/api/v1/all/search").strip()
+        path = "/api/v1/search" if site else tenv_strip("SEARCH_PATH", "/api/v1/all/search")
         if not path.startswith("/"):
             path = "/" + path
         params: dict[str, Any] = {"query": q, "limit": limit}

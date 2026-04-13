@@ -27,7 +27,7 @@ def test_root_returns_help_html_when_no_dist(monkeypatch, tmp_path):
         r = client.get("/")
         assert r.status_code == 200
         assert "text/html" in r.headers.get("content-type", "")
-        assert b"PyTorrent daemon" in r.content
+        assert b"Torflix daemon" in r.content
 
 
 def test_browse_sites_embedded_when_no_external_base(monkeypatch):

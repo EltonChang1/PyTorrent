@@ -251,11 +251,11 @@ export function HomePage() {
         <div className="empty-state">
           <h1 className="hero-title">Catalog unavailable</h1>
           <p className="muted">
-            To show the catalog in Torflix, start <code>pytorrentd</code> with the embedded catalog API, or run{" "}
+            To show the catalog in Torflix, start <code>torflixd</code> with the embedded catalog API, or run{" "}
             <a href="https://github.com/Ryuk-me/Torrent-Api-py" target="_blank" rel="noreferrer">
               Torrent-Api-py
             </a>{" "}
-            and set <code>PYTORRENT_SEARCH_API_BASE</code>, then refresh.
+            and set <code>TORFLIX_SEARCH_API_BASE</code>, then refresh.
           </p>
         </div>
       </div>
