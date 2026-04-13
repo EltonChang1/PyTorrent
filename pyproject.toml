@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "torflix-suite"
 version = "0.1.0"
-description = "Torflix: BitTorrent engine + local daemon + web UI"
+description = "A movie library on your hardware, aimed at a century of film in the wild, not this month's licensed row. (Torflix: BitTorrent engine + local daemon + web UI)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

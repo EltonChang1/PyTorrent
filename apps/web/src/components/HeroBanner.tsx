@@ -31,8 +31,7 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
           <p className="hero-kicker">Featured presentation</p>
           <h1 className="hero-title">Torflix</h1>
           <p className="hero-tagline">
-            Discover titles, queue downloads on this machine, and play in the browser—one self-hosted app, under your
-            control.
+            A movie library on your hardware, aimed at a century of film in the wild, not this month&apos;s licensed row.
           </p>
         </div>
       </div>

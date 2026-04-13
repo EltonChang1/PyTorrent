@@ -1,6 +1,7 @@
 {
   "name": "Torflix",
   "short_name": "Torflix",
+  "description": "A movie library on your hardware, aimed at a century of film in the wild, not this month's licensed row.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A1128",

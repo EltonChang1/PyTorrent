@@ -1,5 +1,7 @@
 # Torflix — User guide
 
+**A movie library on your hardware, aimed at a century of film in the wild, not this month's licensed row.**
+
 This guide is for anyone using the **Torflix website** on a computer where **Torflix is already installed and running**. You do not need the command line for everyday browsing, downloads, or playback.
 
 Screenshots live in **`docs/img/`** and match the current interface. File names are numbered for maintainers; the sections below follow the order that makes sense when learning the app.
