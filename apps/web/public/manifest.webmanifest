@@ -3,6 +3,6 @@
   "short_name": "Torflix",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#10141a",
-  "theme_color": "#10141a"
+  "background_color": "#0A1128",
+  "theme_color": "#0A1128"
 }

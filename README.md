@@ -1,8 +1,24 @@
 # Torflix
 
-Local-first BitTorrent: a Python engine and **`torflixd`** daemon (HTTP + WebSocket) plus a **Torflix web UI**. Your machine runs the swarm; the browser only talks to **your** daemon—browse a catalog, add magnets, **download** normally, or **watch while downloading** in the browser (best with MP4/WebM).
+**Local-first BitTorrent for the browser.** A Python engine and the **`torflixd`** daemon (HTTP + WebSocket) serve a **Torflix web UI** on your machine. The browser never speaks BitTorrent directly—it only talks to **your** daemon. Browse a catalog, add magnets, **download** the usual way, or **watch while downloading** in the player (MP4/WebM work best).
 
-**Use only content you are allowed to download and share.** The browser cannot speak classic BitTorrent; you must run the daemon (default `http://127.0.0.1:8765`).
+**Use only content you are allowed to download and share.** You must run the daemon locally (default **`http://127.0.0.1:8765`**); the UI alone cannot join swarms.
+
+![Torflix home — featured title and catalog rows](docs/img/1.entrance_page.png)
+
+---
+
+## Features
+
+- **Catalog home** — Hero spotlight plus scrollable rows (trending, genres, recommendations, lists).
+- **Search** — Keyword search when the catalog API is enabled.
+- **My downloads** — Progress, files, and links to the in-browser **Watch** flow.
+- **Dashboard** — Favorite genres, row visibility, order, and optional account sync.
+- **Optional sign-in** — Syncs preferences and continue-watching on this Torflix server.
+
+Step-by-step help with labeled screenshots: **[User guide](docs/USER_GUIDE.md)** · operator reference: **[Configuration](docs/CONFIGURATION.md)**.
+
+---
 
 ## Quick start
 
@@ -11,23 +27,40 @@ cd torflix   # or your clone directory
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
-# Terminal 1
+# Terminal 1 — daemon (API + BitTorrent + optional static UI)
 torflixd
 
 # Terminal 2 — web UI (development)
 cd apps/web && npm install && npm run dev
 ```
 
-The command **`pytorrentd`** is still installed as an alias for the same daemon (backward compatibility).
+The **`pytorrentd`** command is the same daemon (backward compatibility).
 
-Open the URL Vite prints (e.g. `http://localhost:5173`). The dev server proxies `/api` and `/ws` to the daemon.
+Open the URL Vite prints (typically **`http://localhost:5173`**). The dev server proxies **`/api`** and **`/ws`** to the daemon on **8765**.
 
-**Built UI on the daemon:** `cd apps/web && npm run build`, then open `http://127.0.0.1:8765` with `torflixd` run from the repo root (or set `TORFLIX_WEB_DIST` to `apps/web/dist`).
+**Production-style UI from the daemon:** build the web app, then open the daemon URL:
 
-## Using the app
+```bash
+cd apps/web && npm run build
+# From repo root, with torflixd running:
+# open http://127.0.0.1:8765
+```
 
-- **[User guide](docs/USER_GUIDE.md)** — step-by-step for people new to the interface (with screenshots).
-- **[Configuration & environment](docs/CONFIGURATION.md)** — ports, catalog/search, optional TMDb/OMDB, CORS, firewall tips.
+Set **`TORFLIX_WEB_DIST`** to your `dist/` path if the UI is not next to the repo layout the daemon expects.
+
+---
+
+## Documentation
+
+| Doc | Purpose |
+|-----|---------|
+| **[User guide](docs/USER_GUIDE.md)** | First-time flow, navigation, Home rows, downloads, Dashboard, troubleshooting — **with screenshots** under `docs/img/`. |
+| **[Configuration](docs/CONFIGURATION.md)** | Environment variables, catalog/search API, CORS, BitTorrent port, health checks. |
+| **[UX roadmap](docs/UX_ROADMAP.md)** | Planned UI work. |
+| **[MCP / agents](contrib/mcp/README.md)** | Hooking automation to the local HTTP API. |
+| **[Packaging `torflixd`](packaging/README.md)** | PyInstaller binary for desktop bundles. |
+
+---
 
 ## Desktop (Tauri)
 
@@ -36,19 +69,28 @@ cd apps/web && npm run build
 cd ../desktop/src-tauri && cargo tauri build
 ```
 
-Packaging the daemon is described in [`packaging/README.md`](packaging/README.md).
+---
 
-## More
+## Limits (short)
 
-- [UX roadmap](docs/UX_ROADMAP.md) · [MCP / agents](contrib/mcp/README.md)
-- References: [BitTorrent spec (Theory.org)](https://wiki.theory.org/BitTorrentSpecification)
+- **In-browser playback** depends on codec/container; not every torrent is playable in the browser.
+- **Magnets** need **`tr=`** trackers (no DHT yet in this stack).
+- **Inbound peers** need **`TORFLIX_BT_PORT`** (default **6881**, or legacy **`PYTORRENT_BT_PORT`**) reachable if you want remote peers.
 
-**Limits (short):** in-browser playback depends on format; magnets need `tr=` trackers (no DHT yet); inbound peers need **`TORFLIX_BT_PORT`** (or legacy `PYTORRENT_BT_PORT`) reachable if you want remote peers.
+---
 
 ## Data directory
 
-By default the daemon uses **`~/.torflix`** for downloads and state if that folder exists, otherwise **`~/.pytorrent`** if you are upgrading from an older install. Override with **`TORFLIX_DATA_DIR`** or **`PYTORRENT_DATA_DIR`**.
+By default the daemon uses **`~/.torflix`** when that folder exists, otherwise **`~/.pytorrent`** for upgrades from older installs. Override with **`TORFLIX_DATA_DIR`** or **`PYTORRENT_DATA_DIR`**.
+
+---
 
 ## License
 
 MIT
+
+---
+
+## Reference
+
+- [BitTorrent specification (Theory.org)](https://wiki.theory.org/BitTorrentSpecification)

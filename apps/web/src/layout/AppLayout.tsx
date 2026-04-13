@@ -45,59 +45,63 @@ export function AppLayout({
     <div className="nf-app">
       <header className="nf-top">
         <div className="nf-top-inner">
-          <NavLink to="/" className="nf-logo" end>
-            Torflix
-          </NavLink>
-          <nav className="nf-nav" aria-label="Primary">
+          <div className="nf-top-left">
+            <NavLink to="/" className="nf-logo" end>
+              Torflix
+            </NavLink>
+            <nav className="nf-nav" aria-label="Primary">
+              {searchConfigured ? (
+                <>
+                  <NavLink to="/" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")} end>
+                    Home
+                  </NavLink>
+                  <NavLink to="/find" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
+                    Search
+                  </NavLink>
+                </>
+              ) : null}
+              <NavLink
+                to="/downloads"
+                className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}
+              >
+                My downloads
+              </NavLink>
+              <NavLink to="/account" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
+                Dashboard
+              </NavLink>
+            </nav>
+          </div>
+          <div className="nf-top-right">
             {searchConfigured ? (
-              <>
-                <NavLink to="/" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")} end>
-                  Home
-                </NavLink>
-                <NavLink to="/find" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
-                  Search
-                </NavLink>
-              </>
-            ) : null}
-            <NavLink
-              to="/downloads"
-              className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}
-            >
-              My downloads
-            </NavLink>
-            <NavLink to="/account" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
-              Dashboard
-            </NavLink>
+              <form
+                className="nf-quick-search"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const q = quick.trim();
+                  if (q.length >= 2) navigate(`/find?q=${encodeURIComponent(q)}`);
+                }}
+              >
+                <input
+                  type="search"
+                  placeholder="Quick search…"
+                  value={quick}
+                  onChange={(e) => setQuick(e.target.value)}
+                  aria-label="Quick search"
+                />
+              </form>
+            ) : (
+              <span className="nf-nav-hint muted">Configure search API for catalog</span>
+            )}
             {user === undefined ? null : user ? (
               <span className="nf-auth-user muted" title={user.username}>
                 {user.username}
               </span>
             ) : (
-              <NavLink to="/login" className={({ isActive }) => (isActive ? "nf-link active" : "nf-link")}>
+              <NavLink to="/login" className={({ isActive }) => (isActive ? "nf-link nf-link-cta active" : "nf-link nf-link-cta")}>
                 Sign in
               </NavLink>
             )}
-          </nav>
-          {searchConfigured ? (
-            <form
-              className="nf-quick-search"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const q = quick.trim();
-                if (q.length >= 2) navigate(`/find?q=${encodeURIComponent(q)}`);
-              }}
-            >
-              <input
-                type="search"
-                placeholder="Quick search…"
-                value={quick}
-                onChange={(e) => setQuick(e.target.value)}
-                aria-label="Quick search"
-              />
-            </form>
-          ) : (
-            <span className="nf-nav-hint muted">Configure search API for catalog</span>
-          )}
+          </div>
         </div>
       </header>
 
@@ -137,12 +141,20 @@ export function AppLayout({
       </details>
 
       <footer className="nf-footer">
-        <p className="nf-legal">
-          Only download and share content you have the right to use. Torflix runs locally on your machine. Use{" "}
-          <strong>Full download</strong> for a normal torrent, or <strong>Watch while downloading</strong> for
-          sequential download and in-browser playback (MP4/WebM work best). For privacy on peer connections, use a{" "}
-          <strong>system-wide VPN</strong>; the app does not start a VPN for you.
-        </p>
+        <div className="nf-footer-inner">
+          <div className="nf-footer-row nf-footer-row-top">
+            <span className="nf-footer-brand">Torflix</span>
+            <p className="nf-legal">
+              Only download and share content you have the right to use. Torflix runs locally on your machine. Use{" "}
+              <strong>Full download</strong> for a normal torrent, or <strong>Watch while downloading</strong> for
+              sequential download and in-browser playback (MP4/WebM work best). For privacy on peer connections, use a{" "}
+              <strong>system-wide VPN</strong>; the app does not start a VPN for you.
+            </p>
+          </div>
+          <div className="nf-footer-row nf-footer-row-bottom">
+            <p className="nf-footer-copy muted">Local-first streaming &amp; downloads · not affiliated with any index site.</p>
+          </div>
+        </div>
       </footer>
     </div>
   );

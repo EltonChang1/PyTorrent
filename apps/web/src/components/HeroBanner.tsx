@@ -28,7 +28,7 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
     return (
       <div className="hero hero-empty">
         <div className="hero-inner">
-          <p className="hero-kicker">Browse · torrent · watch</p>
+          <p className="hero-kicker">Featured presentation</p>
           <h1 className="hero-title">Torflix</h1>
           <p className="hero-tagline">
             Discover titles, queue downloads on this machine, and play in the browser—one self-hosted app, under your
@@ -61,7 +61,7 @@ export function HeroBanner({ item, onMoreInfo, onAddFull, onAddStream, adding, c
         <div className="hero-gradient hero-gradient-solid" />
       )}
       <div className="hero-inner">
-        <p className="hero-kicker">Featured title</p>
+        <p className="hero-kicker">Featured presentation</p>
         <h1 className="hero-title">
           {line1}
           {line2 ? (
